@@ -784,10 +784,10 @@ export function executeSessionRequestNoResponse<TRequest extends ts.server.proto
     session.executeCommand(makeSessionRequest(command, args));
 }
 
-export function openFilesForSession(files: readonly (File | { readonly file: File | string, readonly projectRootPath: string, content?: string })[], session: ts.server.Session): void {
+export function openFilesForSession(files: readonly (string | File | { readonly file: File | string, readonly projectRootPath: string, content?: string })[], session: ts.server.Session): void {
     for (const file of files) {
         session.executeCommand(makeSessionRequest<ts.server.protocol.OpenRequestArgs>(ts.server.CommandNames.Open,
-            "projectRootPath" in file ? { file: typeof file.file === "string" ? file.file : file.file.path, projectRootPath: file.projectRootPath } : { file: file.path })); // eslint-disable-line local/no-in-operator
+            ts.isString(file) ? { file } : "projectRootPath" in file ? { file: typeof file.file === "string" ? file.file : file.file.path, projectRootPath: file.projectRootPath } : { file: file.path })); // eslint-disable-line local/no-in-operator
     }
 }
 
