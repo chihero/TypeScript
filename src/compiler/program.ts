@@ -57,7 +57,7 @@ import {
     targetOptionDeclaration, toFileNameLowerCase, tokenToString, trace, tracing, trimStringEnd, TsConfigSourceFile,
     TypeChecker, typeDirectiveIsEqualTo, TypeReferenceDirectiveResolutionCache, UnparsedSource, VariableDeclaration,
     VariableStatement, walkUpParenthesizedExpressions, WriteFileCallback, WriteFileCallbackData,
-    writeFileEnsuringDirectories, zipToModeAwareCache, TypeReferenceDirectiveResolutionInfo, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ResolvedModule, ResolutionMode,
+    writeFileEnsuringDirectories, zipToModeAwareCache, TypeReferenceDirectiveResolutionInfo, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ResolvedModule, ResolutionMode, ModeAwareCache,
 } from "./_namespaces/ts";
 import * as performance from "./_namespaces/ts.performance";
 
@@ -1141,6 +1141,8 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
 
     let resolvedTypeReferenceDirectives = createModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>();
     let fileProcessingDiagnostics: FilePreprocessingDiagnostics[] | undefined;
+    let automaticTypeDirectiveNames: string[] | undefined;
+    let automaticTypeDirectiveResolutions: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>;
 
     // The below settings are to track if a .js file should be add to the program if loaded via searching under node_modules.
     // This works as imported modules are discovered recursively in a depth first manner, specifically:
@@ -1342,17 +1344,18 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         tracing?.pop();
 
         // load type declarations specified via 'types' argument or implicitly from types/ and node_modules/@types folders
-        const typeReferences: string[] = rootNames.length ? getAutomaticTypeDirectiveNames(options, host) : emptyArray;
-
-        if (typeReferences.length) {
-            tracing?.push(tracing.Phase.Program, "processTypeReferences", { count: typeReferences.length });
+        automaticTypeDirectiveNames ??= rootNames.length ? getAutomaticTypeDirectiveNames(options, host) : emptyArray;
+        automaticTypeDirectiveResolutions = createModeAwareCache();
+        if (automaticTypeDirectiveNames.length) {
+            tracing?.push(tracing.Phase.Program, "processTypeReferences", { count: automaticTypeDirectiveNames.length });
             // This containingFilename needs to match with the one used in managed-side
             const containingDirectory = options.configFilePath ? getDirectoryPath(options.configFilePath) : host.getCurrentDirectory();
             const containingFilename = combinePaths(containingDirectory, inferredTypesContainingFile);
-            const resolutions = resolveTypeReferenceDirectiveNamesReusingOldState(typeReferences, containingFilename);
-            for (let i = 0; i < typeReferences.length; i++) {
+            const resolutions = resolveTypeReferenceDirectiveNamesReusingOldState(automaticTypeDirectiveNames, containingFilename);
+            for (let i = 0; i < automaticTypeDirectiveNames.length; i++) {
                 // under node16/nodenext module resolution, load `types`/ata include names as cjs resolution results by passing an `undefined` mode
-                processTypeReferenceDirective(typeReferences[i], /*mode*/ undefined, resolutions[i], { kind: FileIncludeKind.AutomaticTypeDirectiveFile, typeReference: typeReferences[i], packageId: resolutions[i].resolvedTypeReferenceDirective?.packageId });
+                automaticTypeDirectiveResolutions.set(automaticTypeDirectiveNames[i], /*mode*/ undefined, resolutions[i]);
+                processTypeReferenceDirective(automaticTypeDirectiveNames[i], /*mode*/ undefined, resolutions[i], { kind: FileIncludeKind.AutomaticTypeDirectiveFile, typeReference: automaticTypeDirectiveNames[i], packageId: resolutions[i].resolvedTypeReferenceDirective?.packageId });
             }
             tracing?.pop();
         }
@@ -1455,6 +1458,8 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         getRelationCacheSizes: () => getTypeChecker().getRelationCacheSizes(),
         getFileProcessingDiagnostics: () => fileProcessingDiagnostics,
         getResolvedTypeReferenceDirectives: () => resolvedTypeReferenceDirectives,
+        getAutomaticTypeDirectiveNames: () => automaticTypeDirectiveNames!,
+        getAutomaticTypeDirectiveResolutions: () => automaticTypeDirectiveResolutions,
         isSourceFileFromExternalLibrary,
         isSourceFileDefaultLibrary,
         getSourceFileFromReference,
@@ -1828,7 +1833,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
             if (canReuseResolutions) {
                 const typeDirectiveName = getResolutionName(entry);
                 const mode = getModeForFileReference(entry, containingSourceFile?.impliedNodeFormat);
-                const oldResolution = oldSourceFile?.resolvedTypeReferenceDirectiveNames?.get(typeDirectiveName, mode);
+                const oldResolution = (!isString(containingFile) ? oldSourceFile?.resolvedTypeReferenceDirectiveNames : oldProgram?.getAutomaticTypeDirectiveResolutions())?.get(typeDirectiveName, mode);
                 if (oldResolution?.resolvedTypeReferenceDirective) {
                     if (isTraceEnabled(options, host)) {
                         trace(host,
@@ -2094,10 +2099,17 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
             return structureIsReused;
         }
 
-        if (changesAffectingProgramStructure(oldOptions, options) || host.hasChangedAutomaticTypeDirectiveNames?.()) {
+        if (changesAffectingProgramStructure(oldOptions, options)) {
             return StructureIsReused.SafeModules;
         }
 
+        if (host.hasChangedAutomaticTypeDirectiveNames) {
+            if (host.hasChangedAutomaticTypeDirectiveNames()) return StructureIsReused.SafeModules;
+        }
+        else {
+            automaticTypeDirectiveNames = getAutomaticTypeDirectiveNames(options, host);
+            if (!arrayIsEqualTo(oldProgram.getAutomaticTypeDirectiveNames(), automaticTypeDirectiveNames)) return StructureIsReused.SafeModules;
+        }
         missingFilePaths = oldProgram.getMissingFilePaths();
 
         // update fileName -> file mapping
@@ -2125,6 +2137,8 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         fileReasons = oldProgram.getFileIncludeReasons();
         fileProcessingDiagnostics = oldProgram.getFileProcessingDiagnostics();
         resolvedTypeReferenceDirectives = oldProgram.getResolvedTypeReferenceDirectives();
+        automaticTypeDirectiveNames = oldProgram.getAutomaticTypeDirectiveNames();
+        automaticTypeDirectiveResolutions = oldProgram.getAutomaticTypeDirectiveResolutions();
 
         sourceFileToPackageName = oldProgram.sourceFileToPackageName;
         redirectTargetsMap = oldProgram.redirectTargetsMap;
@@ -4253,8 +4267,8 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         if (!symlinks) {
             symlinks = createSymlinkCache(currentDirectory, getCanonicalFileName);
         }
-        if (files && resolvedTypeReferenceDirectives && !symlinks.hasProcessedResolutions()) {
-            symlinks.setSymlinksFromResolutions(files, resolvedTypeReferenceDirectives);
+        if (files && automaticTypeDirectiveResolutions && !symlinks.hasProcessedResolutions()) {
+            symlinks.setSymlinksFromResolutions(files, automaticTypeDirectiveResolutions);
         }
         return symlinks;
     }

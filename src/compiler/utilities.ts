@@ -7302,7 +7302,7 @@ export interface SymlinkCache {
      * don't include automatic type reference directives. Must be called only when
      * `hasProcessedResolutions` returns false (once per cache instance).
      */
-    setSymlinksFromResolutions(files: readonly SourceFile[], typeReferenceDirectives: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations> | undefined): void;
+    setSymlinksFromResolutions(files: readonly SourceFile[], typeReferenceDirectives: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>): void;
     /**
      * @internal
      * Whether `setSymlinksFromResolutions` has already been called.
@@ -7341,7 +7341,7 @@ export function createSymlinkCache(cwd: string, getCanonicalFileName: GetCanonic
                 file.resolvedModules?.forEach(resolution => processResolution(this, resolution.resolvedModule));
                 file.resolvedTypeReferenceDirectiveNames?.forEach(resolution => processResolution(this, resolution.resolvedTypeReferenceDirective));
             }
-            typeReferenceDirectives?.forEach(resolution => processResolution(this, resolution.resolvedTypeReferenceDirective));
+            typeReferenceDirectives.forEach(resolution => processResolution(this, resolution.resolvedTypeReferenceDirective));
         },
         hasProcessedResolutions: () => hasProcessedResolutions,
     };
