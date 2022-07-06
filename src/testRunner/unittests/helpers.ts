@@ -175,7 +175,7 @@ export function checkResolvedTypeDirective(actual: ts.ResolvedTypeReferenceDirec
     return true;
 }
 
-function checkCache<T>(caption: string, program: ts.Program, fileName: string, expectedContent: Map<string, T> | undefined, getCache: (f: ts.SourceFile) => ts.ModeAwareCache<T> | undefined, entryChecker: (expected: T, original: T) => boolean): void {
+function checkCache<T, U>(caption: string, program: ts.Program, fileName: string, expectedContent: Map<string, T> | undefined, getCache: (f: ts.SourceFile) => ts.ModeAwareCache<U> | undefined, getResolved: (actual: U) => T, entryChecker: (expected: T, original: T) => boolean): void {
     const file = program.getSourceFile(fileName);
     assert.isTrue(file !== undefined, `cannot find file ${fileName}`);
     const cache = getCache(file!);
@@ -184,17 +184,17 @@ function checkCache<T>(caption: string, program: ts.Program, fileName: string, e
     }
     else {
         assert.isTrue(cache !== undefined, `expected ${caption} to be set`);
-        assert.isTrue(mapEqualToCache(expectedContent, cache!, entryChecker), `contents of ${caption} did not match the expected contents.`);
+        assert.isTrue(mapEqualToCache(expectedContent, cache!, getResolved, entryChecker), `contents of ${caption} did not match the expected contents.`);
     }
 }
 
 /** True if the maps have the same keys and values. */
-function mapEqualToCache<T>(left: Map<string, T>, right: ts.ModeAwareCache<T>, valuesAreEqual?: (left: T, right: T) => boolean): boolean {
+function mapEqualToCache<T, U>(left: Map<string, T>, right: ts.ModeAwareCache<U>, getResolved: (actual: U) => T, valuesAreEqual?: (left: T, right: T) => boolean): boolean {
     if (left as any === right) return true; // given the type mismatch (the tests never pass a cache), this'll never be true
     if (!left || !right) return false;
     const someInLeftHasNoMatch = ts.forEachEntry(left, (leftValue, leftKey) => {
         if (!right.has(leftKey, /*mode*/ undefined)) return true;
-        const rightValue = right.get(leftKey, /*mode*/ undefined)!;
+        const rightValue = getResolved(right.get(leftKey, /*mode*/ undefined)!);
         return !(valuesAreEqual ? valuesAreEqual(leftValue, rightValue) : leftValue === rightValue);
     });
     if (someInLeftHasNoMatch) return false;
@@ -204,11 +204,11 @@ function mapEqualToCache<T>(left: Map<string, T>, right: ts.ModeAwareCache<T>, v
 }
 
 export function checkResolvedModulesCache(program: ts.Program, fileName: string, expectedContent: Map<string, ts.ResolvedModule | undefined> | undefined): void {
-    checkCache("resolved modules", program, fileName, expectedContent, f => f.resolvedModules, checkResolvedModule);
+    checkCache("resolved modules", program, fileName, expectedContent, f => f.resolvedModules, resolved => resolved.resolvedModule, checkResolvedModule);
 }
 
 export function checkResolvedTypeDirectivesCache(program: ts.Program, fileName: string, expectedContent: Map<string, ts.ResolvedTypeReferenceDirective> | undefined): void {
-    checkCache("resolved type directives", program, fileName, expectedContent, f => f.resolvedTypeReferenceDirectiveNames, checkResolvedTypeDirective);
+    checkCache("resolved type directives", program, fileName, expectedContent, f => f.resolvedTypeReferenceDirectiveNames, resolved => resolved.resolvedTypeReferenceDirective, checkResolvedTypeDirective);
 }
 
 export function createResolvedModule(resolvedFileName: string, isExternalLibraryImport = false): ts.ResolvedModuleFull {

@@ -44,8 +44,8 @@ import {
     OutliningSpan, ParseConfigFileHost, ParsedCommandLine, parseJsonSourceFileConfigFileContent, Path,
     positionIsSynthesized, PossibleProgramFileInfo, PragmaMap, PrivateIdentifier, Program, PropertyName, Push,
     QuickInfo, refactor, RefactorContext, RefactorEditInfo, RefactorTriggerReason, ReferencedSymbol, ReferenceEntry,
-    Rename, RenameInfo, RenameInfoOptions, RenameLocation, ResolvedModuleFull, ResolvedProjectReference,
-    ResolvedTypeReferenceDirective, returnFalse, scanner, ScriptElementKind, ScriptElementKindModifier, ScriptKind,
+    Rename, RenameInfo, RenameInfoOptions, RenameLocation, ResolvedProjectReference,
+    returnFalse, scanner, ScriptElementKind, ScriptElementKindModifier, ScriptKind,
     ScriptTarget, SelectionRange, SemanticClassificationFormat, setObjectAllocator, Signature,
     SignatureDeclaration, SignatureFlags, SignatureHelp, SignatureHelpItems, SignatureHelpItemsOptions, SignatureKind,
     singleElementArray, SmartSelectionRange, SortedArray, SourceFile, SourceFileLike, SourceMapSource, Statement,
@@ -54,7 +54,7 @@ import {
     TextRange, TextSpan, textSpanEnd, timestamp, TodoComment, TodoCommentDescriptor, Token, toPath, tracing,
     TransformFlags, TransientSymbol, Type, TypeChecker, TypeFlags, TypeNode, TypeParameter, TypePredicate,
     TypeReference, typeToDisplayParts, UnderscoreEscapedMap, UnionOrIntersectionType, UnionType, updateSourceFile,
-    UserPreferences, VariableDeclaration,
+    UserPreferences, VariableDeclaration, ResolvedModuleWithFailedLookupLocations, ResolvedTypeReferenceDirectiveWithFailedLookupLocations,
 } from "./_namespaces/ts";
 
 /** The version of the language service API */
@@ -762,8 +762,8 @@ class SourceFileObject extends NodeObject implements SourceFile {
     public languageVariant!: LanguageVariant;
     public identifiers!: Map<string, string>;
     public nameTable: UnderscoreEscapedMap<number> | undefined;
-    public resolvedModules: ModeAwareCache<ResolvedModuleFull> | undefined;
-    public resolvedTypeReferenceDirectiveNames!: ModeAwareCache<ResolvedTypeReferenceDirective>;
+    public resolvedModules: ModeAwareCache<ResolvedModuleWithFailedLookupLocations> | undefined;
+    public resolvedTypeReferenceDirectiveNames!: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>;
     public imports!: readonly StringLiteralLike[];
     public moduleAugmentations!: StringLiteral[];
     private namedDeclarations: Map<string, Declaration[]> | undefined;

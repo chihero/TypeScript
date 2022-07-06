@@ -116,16 +116,29 @@ function createResolvedModuleWithFailedLookupLocations(
     resultFromCache: ResolvedModuleWithFailedLookupLocations | undefined
 ): ResolvedModuleWithFailedLookupLocations {
     if (resultFromCache) {
-        resultFromCache.failedLookupLocations.push(...failedLookupLocations);
-        resultFromCache.affectingLocations.push(...affectingLocations);
+        if (failedLookupLocations.length) resultFromCache.failedLookupLocations.push(...failedLookupLocations);
+        resultFromCache.affectingLocations = updateResolutionField(resultFromCache.affectingLocations, affectingLocations);
+        resultFromCache.resolutionDiagnostics = updateResolutionField(resultFromCache.resolutionDiagnostics, diagnostics);
         return resultFromCache;
     }
     return {
         resolvedModule: resolved && { resolvedFileName: resolved.path, originalPath: resolved.originalPath === true ? undefined : resolved.originalPath, extension: resolved.extension, isExternalLibraryImport, packageId: resolved.packageId },
         failedLookupLocations,
-        affectingLocations,
-        resolutionDiagnostics: diagnostics,
+        affectingLocations: initializeResolutionField(affectingLocations),
+        resolutionDiagnostics: initializeResolutionField(diagnostics),
     };
+}
+
+function initializeResolutionField<T>(value: T[]): T[] | undefined {
+    return value.length ? value : undefined;
+}
+
+/** @internal */
+export function updateResolutionField<T>(to: T[] | undefined, value: T[] | undefined) {
+    if (!value?.length) return to;
+    if (!to?.length) return value;
+    to.push(...value);
+    return to;
 }
 
 /** @internal */
@@ -425,7 +438,12 @@ export function resolveTypeReferenceDirective(typeReferenceDirectiveName: string
             isExternalLibraryImport: pathContainsNodeModules(fileName),
         };
     }
-    result = { resolvedTypeReferenceDirective, failedLookupLocations, affectingLocations, resolutionDiagnostics: diagnostics };
+    result = {
+        resolvedTypeReferenceDirective,
+        failedLookupLocations,
+        affectingLocations: initializeResolutionField(affectingLocations),
+        resolutionDiagnostics: initializeResolutionField(diagnostics),
+    };
     perFolderCache?.set(typeReferenceDirectiveName, /*mode*/ resolutionMode, result);
     if (traceEnabled) traceResult(result);
     return result;
