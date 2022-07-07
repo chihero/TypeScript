@@ -589,12 +589,15 @@ export interface TypeReferenceDirectiveResolutionCache extends PerDirectoryResol
     /** @internal */ clearAllExceptPackageJsonInfoCache(): void;
 }
 
+/** @internal */
+export type MoreAwareCacheEntry<T> = [key: string, mode: ResolutionMode, elem: T];
 export interface ModeAwareCache<T> {
     get(key: string, mode: ResolutionMode): T | undefined;
     set(key: string, mode: ResolutionMode, value: T): this;
     delete(key: string, mode: ResolutionMode): this;
     has(key: string, mode: ResolutionMode): boolean;
     forEach(cb: (elem: T, key: string, mode: ResolutionMode) => void): void;
+    /** @internal */ entries(): Iterator<MoreAwareCacheEntry<T>>;
     size(): number;
 }
 
@@ -799,6 +802,15 @@ export function createModeAwareCache<T>(): ModeAwareCache<T> {
                 const [specifier, mode] = memoizedReverseKeys.get(key)!;
                 return cb(elem, specifier, mode);
             });
+        },
+        entries() {
+            const keys = underlying.entries();
+            return {
+                next() {
+                    const next = keys.next();
+                    return !next.done ? { value: [...memoizedReverseKeys.get(next.value[0])!, next.value[1]] } : next;
+                },
+            };
         },
         size() {
             return underlying.size;

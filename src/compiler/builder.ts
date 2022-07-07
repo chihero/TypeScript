@@ -4,14 +4,19 @@ import {
     BundleBuildInfo, CancellationToken, CommandLineOption, compareStringsCaseSensitive, compareValues, CompilerHost,
     CompilerOptions, compilerOptionsAffectDeclarationPath, compilerOptionsAffectEmit,
     compilerOptionsAffectSemanticDiagnostics, CompilerOptionsValue, concatenate, convertToOptionsWithAbsolutePaths,
-    createBuildInfo, createGetCanonicalFileName, createProgram, CustomTransformers, Debug, Diagnostic,
+    createBuildInfo, createGetCanonicalFileName, createModeAwareCache, createProgram, CustomTransformers, Debug, Diagnostic,
     DiagnosticCategory, DiagnosticMessageChain, DiagnosticRelatedInformation, DiagnosticWithLocation,
     EmitAndSemanticDiagnosticsBuilderProgram, EmitOnly, EmitResult, emitSkippedWithNoDiagnostics, emptyArray,
     ensurePathIsNonModuleName, filterSemanticDiagnostics, forEach, forEachEntry, forEachKey, generateDjb2Hash,
     GetCanonicalFileName, getDirectoryPath, getEmitDeclarations, getNormalizedAbsolutePath, getOptionsNameMap,
     getOwnKeys, getRelativePathFromDirectory, getTsBuildInfoEmitOutputFilePath, handleNoEmitOptions, isArray,
-    isDeclarationFileName, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, noop, notImplemented,
+    isDeclarationFileName, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, ModeAwareCache, MoreAwareCacheEntry, noop, notImplemented,
     outFile, Path, Program, ProjectReference, ReadBuildProgramHost, ReadonlyCollection,
+    ResolutionMode,
+    ResolvedModuleFull,
+    ResolvedModuleWithFailedLookupLocations,
+    ResolvedTypeReferenceDirective,
+    ResolvedTypeReferenceDirectiveWithFailedLookupLocations,
     returnFalse, returnUndefined, SemanticDiagnosticsBuilderProgram, skipTypeChecking, some, SourceFile,
     sourceFileMayBeEmitted, SourceMapEmitResult, toPath, tryAddToSet, WriteFileCallback, WriteFileCallbackData,
 } from "./_namespaces/ts";
@@ -92,6 +97,10 @@ export interface ReusableBuilderProgramState extends BuilderState {
      * Bundle information either from oldState or current one so it can be used to complete the information in buildInfo when emitting only js or dts files
      */
     bundle?: BundleBuildInfo;
+    cacheResolutions?: {
+        modules: Map<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
+        typeRefs: Map<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
+    };
 }
 
 /** @internal */
@@ -834,6 +843,8 @@ function getBinderAndCheckerDiagnosticsOfFile(state: BuilderProgramState, source
 /** @internal */
 export type ProgramBuildInfoFileId = number & { __programBuildInfoFileIdBrand: any };
 /** @internal */
+export type ProgramBuildInfoAbsoluteFileId = number & { __programBuildInfoAbsoluteFileIdBrand: any };
+/** @internal */
 export type ProgramBuildInfoFileIdListId = number & { __programBuildInfoFileIdListIdBrand: any };
 /** @internal */
 export type ProgramBuildInfoDiagnostic = ProgramBuildInfoFileId | [fileId: ProgramBuildInfoFileId, diagnostics: readonly ReusableDiagnostic[]];
@@ -871,6 +882,44 @@ export type ProgramBuildInfoEmitSignature = ProgramBuildInfoFileId | [fileId: Pr
  */
 export type ProgramMultiFileEmitBuildInfoFileInfo = string | ProgramMultiFileEmitBuildInfoBuilderStateFileInfo;
 /** @internal */
+export interface ProgramBuildInfoResolutionBase {
+    readonly resolvedFileName: ProgramBuildInfoAbsoluteFileId;
+    readonly isExternalLibraryImport: true | undefined;
+    readonly originalPath: ProgramBuildInfoAbsoluteFileId | undefined;
+    readonly primary: true | undefined;
+    extension: undefined;
+}
+/** @internal */
+export type ProgramBuildInfoResolvedModuleFull = Omit<ResolvedModuleFull, "resolvedFileName" | "isExternalLibraryImport" | "originalPath" | "extension"> & ProgramBuildInfoResolutionBase;
+/** @internal */
+export type ProgramBuildInfoResolvedTypeReferenceDirective = Omit<ResolvedTypeReferenceDirective, "resolvedFileName" | "isExternalLibraryImport" | "originalPath" | "primary"> & ProgramBuildInfoResolutionBase;
+/** @internal */
+export interface ProgramBuildInfoResolution {
+    readonly resolvedModule: ProgramBuildInfoResolvedModuleFull | undefined;
+    readonly resolvedTypeReferenceDirective: ProgramBuildInfoResolvedTypeReferenceDirective | undefined;
+    readonly failedLookupLocations: readonly ProgramBuildInfoAbsoluteFileId[] | undefined;
+    readonly affectingLocations: readonly ProgramBuildInfoAbsoluteFileId[] | undefined;
+    readonly resolutionDiagnostics: readonly ReusableDiagnostic[] | undefined;
+}
+/** @internal */
+export type ProgramBuildInfoResolutionId = number & { __programBuildInfoResolutionIdBrand: any };
+/** @internal */
+export type ProgramBuildInfoResolutionNameId = number & { __programBuildInfoResolutionNameIdBrand: any };
+/** @internal */
+export type ProgramBuildInfoResolutionEntry = [nameId: ProgramBuildInfoResolutionNameId, resolutionId: ProgramBuildInfoResolutionId, mode?: ResolutionMode];
+/** @internal */
+export type ProgramBuildInfoResolutionEntryId = number & { __programBuildInfoResolutionEntryId: any };
+/** @internal */
+export type ProgramBuildInfoResolutionCache = [dirId: ProgramBuildInfoFileId, resolutions: readonly ProgramBuildInfoResolutionEntryId[]][];
+/** @internal */
+export interface ProgramBuildInfoCacheResolutions {
+    resolutions: readonly ProgramBuildInfoResolution[];
+    names: readonly string[];
+    resolutionEntries: readonly ProgramBuildInfoResolutionEntry[];
+    modules: ProgramBuildInfoResolutionCache | undefined;
+    typeRefs: ProgramBuildInfoResolutionCache | undefined;
+}
+/** @internal */
 export interface ProgramMultiFileEmitBuildInfo {
     fileNames: readonly string[];
     fileInfos: readonly ProgramMultiFileEmitBuildInfoFileInfo[];
@@ -883,7 +932,8 @@ export interface ProgramMultiFileEmitBuildInfo {
     changeFileSet: readonly ProgramBuildInfoFileId[] | undefined;
     emitSignatures: readonly ProgramBuildInfoEmitSignature[] | undefined;
     // Because this is only output file in the program, we dont need fileId to deduplicate name
-    latestChangedDtsFile?: string | undefined;
+    latestChangedDtsFile: string | undefined;
+    cacheResolutions: ProgramBuildInfoCacheResolutions | undefined;
 }
 /**
  * ProgramBundleEmitBuildInfoFileInfo is string if !FileInfo.impliedFormat otherwise encoded FileInfo
@@ -906,6 +956,7 @@ export interface ProgramBundleEmitBuildInfo {
     outSignature: EmitSignature | undefined;
     latestChangedDtsFile: string | undefined;
     pendingEmit: ProgramBuildInfoBundlePendingEmit | undefined;
+    cacheResolutions: ProgramBuildInfoCacheResolutions | undefined;
 }
 
 /** @internal */
@@ -925,7 +976,13 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
     // Convert the file name to Path here if we set the fileName instead to optimize multiple d.ts file emits and having to compute Canonical path
     const latestChangedDtsFile = state.latestChangedDtsFile ? relativeToBuildInfoEnsuringAbsolutePath(state.latestChangedDtsFile) : undefined;
     const fileNames: string[] = [];
-    const fileNameToFileId = new Map<string, ProgramBuildInfoFileId>();
+    const fileNameToFileId = new Map<string, ProgramBuildInfoFileId & ProgramBuildInfoAbsoluteFileId>();
+    let resolutions: ProgramBuildInfoResolution[] | undefined;
+    const resolutionToResolutionId = new Map<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ProgramBuildInfoResolutionId>();
+    let names: string[] | undefined;
+    let resolutionNameToResolutionNameId: Map<string, ProgramBuildInfoResolutionNameId> | undefined;
+    let resolutionEntries: ProgramBuildInfoResolutionEntry[] | undefined;
+    let resolutionEntryToResolutionEntryId: Map<string, ProgramBuildInfoResolutionEntryId> | undefined;
     if (outFile(state.compilerOptions)) {
         // Copy all fileInfo, version and impliedFormat
         // Affects global scope and signature doesnt matter because with --out they arent calculated or needed to determine upto date ness
@@ -936,10 +993,11 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
                 { version: value.version, impliedFormat: value.impliedFormat, signature: undefined, affectsGlobalScope: undefined } :
                 value.version;
         });
+        const cacheResolutions = toProgramBuildInfoResolutions();
         const program: ProgramBundleEmitBuildInfo = {
             fileNames,
             fileInfos,
-            options: convertToProgramBuildInfoCompilerOptions(state.compilerOptions),
+            options: toProgramBuildInfoCompilerOptions(state.compilerOptions),
             outSignature: state.outSignature,
             latestChangedDtsFile,
             pendingEmit: !state.programEmitPending ?
@@ -947,6 +1005,7 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
                 state.programEmitPending === getBuilderFileEmit(state.compilerOptions) ?
                     false : // Pending emit is same as deteremined by compilerOptions
                     state.programEmitPending, // Actual value
+            cacheResolutions,
         };
         // Complete the bundle information if we are doing partial emit (only js or only dts)
         const { js, dts, commonSourceDirectory, sourceFiles } = bundle!;
@@ -1023,7 +1082,7 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
                 value.length ?
                     [
                         toFileId(key),
-                        convertToReusableDiagnostics(value, relativeToBuildInfo)
+                        value.map(toReusableDiagnostic),
                     ] :
                     toFileId(key)
             );
@@ -1057,10 +1116,11 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
         }
     }
 
+    const cacheResolutions = toProgramBuildInfoResolutions();
     const program: ProgramMultiFileEmitBuildInfo = {
         fileNames,
         fileInfos,
-        options: convertToProgramBuildInfoCompilerOptions(state.compilerOptions),
+        options: toProgramBuildInfoCompilerOptions(state.compilerOptions),
         fileIdsList,
         referencedMap,
         exportedModulesMap,
@@ -1069,6 +1129,7 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
         changeFileSet,
         emitSignatures,
         latestChangedDtsFile,
+        cacheResolutions,
     };
     return createBuildInfo(program, bundle);
 
@@ -1080,13 +1141,21 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
         return ensurePathIsNonModuleName(getRelativePathFromDirectory(buildInfoDirectory, path, getCanonicalFileName));
     }
 
-    function toFileId(path: Path): ProgramBuildInfoFileId {
+    function toFileAndAbsoluteFileId(path: string): ProgramBuildInfoFileId & ProgramBuildInfoAbsoluteFileId {
         let fileId = fileNameToFileId.get(path);
         if (fileId === undefined) {
             fileNames.push(relativeToBuildInfo(path));
-            fileNameToFileId.set(path, fileId = fileNames.length as ProgramBuildInfoFileId);
+            fileNameToFileId.set(path, fileId = fileNames.length as ProgramBuildInfoFileId & ProgramBuildInfoAbsoluteFileId);
         }
         return fileId;
+    }
+
+    function toFileId(path: Path): ProgramBuildInfoFileId {
+        return toFileAndAbsoluteFileId(path);
+    }
+
+    function toAbsoluteFileId(path: string): ProgramBuildInfoAbsoluteFileId {
+        return toFileAndAbsoluteFileId(getNormalizedAbsolutePath(path, currentDirectory));
     }
 
     function toFileIdListId(set: ReadonlySet<Path>): ProgramBuildInfoFileIdListId {
@@ -1103,62 +1172,169 @@ function getBuildInfo(state: BuilderProgramState, getCanonicalFileName: GetCanon
     /**
      * @param optionKey key of CommandLineOption to use to determine if the option should be serialized in tsbuildinfo
      */
-    function convertToProgramBuildInfoCompilerOptions(options: CompilerOptions) {
+    function toProgramBuildInfoCompilerOptions(options: CompilerOptions) {
         let result: CompilerOptions | undefined;
         const { optionsNameMap } = getOptionsNameMap();
         for (const name of getOwnKeys(options).sort(compareStringsCaseSensitive)) {
             const optionInfo = optionsNameMap.get(name.toLowerCase());
             if (optionInfo?.affectsBuildInfo) {
-                (result ||= {})[name] = convertToReusableCompilerOptionValue(
+                (result ||= {})[name] = toReusableCompilerOptionValue(
                     optionInfo,
                     options[name] as CompilerOptionsValue,
-                    relativeToBuildInfoEnsuringAbsolutePath
                 );
             }
         }
         return result;
     }
-}
 
-function convertToReusableCompilerOptionValue(option: CommandLineOption | undefined, value: CompilerOptionsValue, relativeToBuildInfo: (path: string) => string) {
-    if (option) {
-        if (option.type === "list") {
-            const values = value as readonly (string | number)[];
-            if (option.element.isFilePath && values.length) {
-                return values.map(relativeToBuildInfo);
+    function toReusableCompilerOptionValue(option: CommandLineOption | undefined, value: CompilerOptionsValue) {
+        if (option) {
+            if (option.type === "list") {
+                const values = value as readonly (string | number)[];
+                if (option.element.isFilePath && values.length) {
+                    return values.map(relativeToBuildInfoEnsuringAbsolutePath);
+                }
+            }
+            else if (option.isFilePath) {
+                return relativeToBuildInfoEnsuringAbsolutePath(value as string);
             }
         }
-        else if (option.isFilePath) {
-            return relativeToBuildInfo(value as string);
-        }
+        return value;
     }
-    return value;
-}
 
-function convertToReusableDiagnostics(diagnostics: readonly Diagnostic[], relativeToBuildInfo: (path: string) => string): readonly ReusableDiagnostic[] {
-    Debug.assert(!!diagnostics.length);
-    return diagnostics.map(diagnostic => {
-        const result: ReusableDiagnostic = convertToReusableDiagnosticRelatedInformation(diagnostic, relativeToBuildInfo);
+    function toReusableDiagnostic(diagnostic: Diagnostic): ReusableDiagnostic {
+        const result: ReusableDiagnostic = toReusableDiagnosticRelatedInformation(diagnostic);
         result.reportsUnnecessary = diagnostic.reportsUnnecessary;
         result.reportDeprecated = diagnostic.reportsDeprecated;
         result.source = diagnostic.source;
         result.skippedOn = diagnostic.skippedOn;
-        const { relatedInformation } = diagnostic;
-        result.relatedInformation = relatedInformation ?
-            relatedInformation.length ?
-                relatedInformation.map(r => convertToReusableDiagnosticRelatedInformation(r, relativeToBuildInfo)) :
-                [] :
-            undefined;
+        result.relatedInformation = diagnostic.relatedInformation?.map(toReusableDiagnosticRelatedInformation);
         return result;
-    });
+    }
+
+    function toReusableDiagnosticRelatedInformation(diagnostic: DiagnosticRelatedInformation): ReusableDiagnosticRelatedInformation {
+        const { file } = diagnostic;
+        return {
+            ...diagnostic,
+            file: file ? relativeToBuildInfo(file.resolvedPath) : undefined
+        };
+    }
+
+    function toReadonlyArrayOrUndefined<T, U>(array: T[] | undefined, map: (a: T) => U): readonly U[] | undefined {
+        return array?.length ? array.map(map) : undefined;
+    }
+
+    function toProgramBuildInfoResolutions(): ProgramBuildInfoCacheResolutions | undefined {
+        const cacheResolutions = getCacheResolutions(state, getCanonicalFileName);
+        const modules = toProgramBuildInfoResolutionCache(cacheResolutions?.modules);
+        const typeRefs = toProgramBuildInfoResolutionCache(cacheResolutions?.typeRefs);
+        if (!resolutions) return;
+        Debug.assertIsDefined(names);
+        Debug.assertIsDefined(resolutionEntries);
+        return {
+            resolutions,
+            names,
+            resolutionEntries,
+            modules,
+            typeRefs,
+        };
+    }
+
+    function toProgramBuildInfoResolutionCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(cache: Map<Path, ModeAwareCache<T>> | undefined): ProgramBuildInfoResolutionCache | undefined {
+        return cache && arrayFrom(cache.entries(), ([dirPath, dirCache]) => [
+            toFileId(dirPath),
+            arrayFrom(dirCache.entries()).map(toProgramBuildInfoResolutionEntryId)
+        ]);
+    }
+
+    function toProgramBuildInfoResolutionEntryId([name, mode, resolution]: MoreAwareCacheEntry<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>): ProgramBuildInfoResolutionEntryId {
+        const resolutionNameId = toProgramBuildInfoResolutionNameId(name);
+        const resolutionId = toProgramBuildInfoResolutionId(resolution);
+        const key = `${resolutionNameId},${mode},${resolutionId}`;
+        let resolutionEntryId = resolutionEntryToResolutionEntryId?.get(key);
+        if (resolutionEntryId === undefined) {
+            (resolutionEntries ||= []).push(mode ? [resolutionNameId, resolutionId, mode] : [resolutionNameId, resolutionId]);
+            (resolutionEntryToResolutionEntryId ||= new Map()).set(key, resolutionEntryId = resolutionEntries.length as ProgramBuildInfoResolutionEntryId);
+        }
+        return resolutionEntryId;
+    }
+
+    function toProgramBuildInfoResolutionNameId(name: string): ProgramBuildInfoResolutionNameId {
+        let resolutionNameId = resolutionNameToResolutionNameId?.get(name);
+        if (resolutionNameId === undefined) {
+            (names ??= []).push(name);
+            (resolutionNameToResolutionNameId ??= new Map()).set(name, resolutionNameId = names.length as ProgramBuildInfoResolutionNameId);
+        }
+        return resolutionNameId;
+    }
+
+    function toProgramBuildInfoResolutionId(resolution: ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations): ProgramBuildInfoResolutionId {
+        let resolutionId = resolutionToResolutionId.get(resolution);
+        if (resolutionId === undefined) {
+            (resolutions ??= []).push(toProgramBuildInfoResolution(resolution));
+            resolutionToResolutionId.set(resolution, resolutionId = resolutions.length as ProgramBuildInfoResolutionId);
+        }
+        return resolutionId;
+    }
+
+    function toProgramBuildInfoResolution(resolution: ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations): ProgramBuildInfoResolution {
+        return {
+            resolvedModule: toProgramBuildInfoResolved((resolution as ResolvedModuleWithFailedLookupLocations).resolvedModule),
+            resolvedTypeReferenceDirective: toProgramBuildInfoResolved((resolution as ResolvedTypeReferenceDirectiveWithFailedLookupLocations).resolvedTypeReferenceDirective),
+            failedLookupLocations: toReadonlyArrayOrUndefined(resolution.failedLookupLocations, toAbsoluteFileId),
+            affectingLocations: toReadonlyArrayOrUndefined(resolution.affectingLocations, toAbsoluteFileId),
+            resolutionDiagnostics: toReadonlyArrayOrUndefined(resolution.resolutionDiagnostics, toReusableDiagnostic),
+        };
+    }
+
+    function toProgramBuildInfoResolved(resolved: ResolvedModuleFull | undefined): ProgramBuildInfoResolvedModuleFull | undefined;
+    function toProgramBuildInfoResolved(resolved: ResolvedTypeReferenceDirective | undefined): ProgramBuildInfoResolvedTypeReferenceDirective | undefined;
+    function toProgramBuildInfoResolved(resolved: ResolvedModuleFull | ResolvedTypeReferenceDirective | undefined): ProgramBuildInfoResolvedModuleFull | ProgramBuildInfoResolvedTypeReferenceDirective | undefined {
+        return resolved ? {
+            ...resolved,
+            resolvedFileName: toAbsoluteFileId(resolved.resolvedFileName!),
+            isExternalLibraryImport: resolved.isExternalLibraryImport ? true : undefined,
+            originalPath: resolved.originalPath ? toAbsoluteFileId(resolved.originalPath) : undefined,
+            primary: (resolved as ResolvedTypeReferenceDirective).primary || undefined,
+            extension: undefined,
+        } : undefined;
+    }
 }
 
-function convertToReusableDiagnosticRelatedInformation(diagnostic: DiagnosticRelatedInformation, relativeToBuildInfo: (path: string) => string): ReusableDiagnosticRelatedInformation {
-    const { file } = diagnostic;
-    return {
-        ...diagnostic,
-        file: file ? relativeToBuildInfo(file.resolvedPath) : undefined
-    };
+function getCacheResolutions(state: BuilderProgramState, getCanonicalFileName: GetCanonicalFileName) {
+    if (state.cacheResolutions || !state.compilerOptions.cacheResolutions) return state.cacheResolutions;
+    let modules: Map<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
+    let typeRefs: Map<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
+    state.program!.getSourceFiles().forEach(f => {
+        const containingPath = getDirectoryPath(f.path);
+        modules = toPerDirectoryCache(modules, containingPath, f.resolvedModules);
+        typeRefs = toPerDirectoryCache(typeRefs, containingPath, f.resolvedTypeReferenceDirectiveNames);
+    });
+    const automaticTypeDirectiveNames = state.program!.getAutomaticTypeDirectiveNames();
+    if (automaticTypeDirectiveNames.length) {
+        const currentDirectory = state.program!.getCurrentDirectory();
+        const containingDirectory = state.compilerOptions.configFilePath ? getDirectoryPath(state.compilerOptions.configFilePath) : currentDirectory;
+        const containingPath = toPath(containingDirectory, currentDirectory, getCanonicalFileName);
+        typeRefs = toPerDirectoryCache(typeRefs, containingPath, state.program!.getAutomaticTypeDirectiveResolutions());
+    }
+    return state.cacheResolutions = { modules, typeRefs };
+}
+
+function toPerDirectoryCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
+    perDirCache: Map<Path, ModeAwareCache<T>> | undefined,
+    dirPath: Path,
+    cache: ModeAwareCache<T> | undefined,
+): Map<Path, ModeAwareCache<T>> | undefined {
+    if (!cache?.size()) return perDirCache;
+    let dirCache = perDirCache?.get(dirPath);
+    cache.forEach((resolution, name, mode) => {
+        if (!(resolution as ResolvedModuleWithFailedLookupLocations).resolvedModule?.resolvedFileName && !(resolution as ResolvedTypeReferenceDirectiveWithFailedLookupLocations).resolvedTypeReferenceDirective?.resolvedFileName) return;
+        // TODO:: (shkamat) redirected references
+        if (dirCache?.has(name, mode)) return;
+        if (!dirCache) (perDirCache ??= new Map()).set(dirPath, dirCache = createModeAwareCache());
+        dirCache.set(name, mode, resolution);
+    });
+    return perDirCache;
 }
 
 /** @internal */
