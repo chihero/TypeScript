@@ -11,6 +11,7 @@ import {
     GetCanonicalFileName, getDirectoryPath, getEmitDeclarations, getNormalizedAbsolutePath, getOptionsNameMap,
     getOwnKeys, getRelativePathFromDirectory, getTsBuildInfoEmitOutputFilePath, handleNoEmitOptions, isArray,
     isDeclarationFileName, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, ModeAwareCache, MoreAwareCacheEntry, noop, notImplemented,
+    OldBuildInfoProgram,
     outFile, Path, Program, ProjectReference, ReadBuildProgramHost, ReadonlyCollection,
     ResolutionMode,
     ResolvedModuleFull,
@@ -1387,7 +1388,7 @@ export function getBuilderCreationParameters(newProgramOrRootNames: Program | re
             rootNames: newProgramOrRootNames,
             options: hostOrOptions as CompilerOptions,
             host: oldProgramOrHost as CompilerHost,
-            oldProgram: oldProgram && oldProgram.getProgramOrUndefined(),
+            oldProgram: oldProgram?.getProgramOrOldBuildInfoProgramUndefined(),
             configFileParsingDiagnostics,
             projectReferences
         });
@@ -1485,6 +1486,7 @@ export function createBuilderProgram(kind: BuilderProgramKind, { newProgram, hos
     builderProgram.getSemanticDiagnostics = getSemanticDiagnostics;
     builderProgram.emit = emit;
     builderProgram.releaseProgram = () => releaseCache(state, getCanonicalFileName);
+    builderProgram.getProgramOrOldBuildInfoProgramUndefined = createGetProgramOrOldBuildInfoProgramUndefined(state);
 
     if (kind === BuilderProgramKind.SemanticDiagnosticsBuilderProgram) {
         (builderProgram as SemanticDiagnosticsBuilderProgram).getSemanticDiagnosticsOfNextAffectedFile = getSemanticDiagnosticsOfNextAffectedFile;
@@ -1905,6 +1907,7 @@ export function createBuilderProgramUsingProgramBuildInfo(buildInfo: BuildInfo, 
         restoreEmitState: noop,
         getProgram: notImplemented,
         getProgramOrUndefined: returnUndefined,
+        getProgramOrOldBuildInfoProgramUndefined: createGetProgramOrOldBuildInfoProgramUndefined(state),
         releaseProgram: noop,
         getCompilerOptions: () => state.compilerOptions,
         getSourceFile: notImplemented,
@@ -1950,6 +1953,22 @@ export function createBuilderProgramUsingProgramBuildInfo(buildInfo: BuildInfo, 
     }
 }
 
+function createGetProgramOrOldBuildInfoProgramUndefined(state: ReusableBuilderProgramState): () => Program | OldBuildInfoProgram | undefined {
+    let oldProgram: OldBuildInfoProgram | false | undefined;
+    return () => (state.program ?? oldProgram ?? (oldProgram = createOldBuildInfoProgram(state) || false)) || undefined;
+}
+
+/** @internal */
+export function createOldBuildInfoProgram(
+    state: ReusableBuilderProgramState
+): OldBuildInfoProgram | undefined {
+    if (!state.cacheResolutions && !state.resuableCacheResolutions) return undefined;
+    return {
+        isBuildInfoProgram: true,
+        getCompilerOptions: () => state.compilerOptions,
+    };
+}
+
 /** @internal */
 export function getBuildInfoFileVersionMap(
     program: ProgramBuildInfo,
@@ -1975,6 +1994,7 @@ export function createRedirectedBuilderProgram(getState: () => { program?: Progr
         restoreEmitState: noop,
         getProgram,
         getProgramOrUndefined: () => getState().program,
+        getProgramOrOldBuildInfoProgramUndefined: () => getState().program,
         releaseProgram: () => getState().program = undefined,
         getCompilerOptions: () => getState().compilerOptions,
         getSourceFile: fileName => getProgram().getSourceFile(fileName),

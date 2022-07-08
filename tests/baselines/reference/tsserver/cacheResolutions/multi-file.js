@@ -1873,7 +1873,7 @@ Info 500  [00:10:16.000] File '/a/lib/package.json' does not exist according to 
 Info 501  [00:10:17.000] File '/a/package.json' does not exist according to earlier cached lookups.
 Info 502  [00:10:18.000] File '/package.json' does not exist according to earlier cached lookups.
 Info 503  [00:10:19.000] FileWatcher:: Close:: WatchInfo: /src/project/node_modules/pkg1/package.json 2000 undefined Project: /src/project/tsconfig.json WatchType: File location affecting resolution
-Info 504  [00:10:20.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 6 structureChanged: true structureIsReused:: Not Elapsed:: *ms
+Info 504  [00:10:20.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 6 structureChanged: true structureIsReused:: SafeModuleCache Elapsed:: *ms
 Info 505  [00:10:21.000] Project '/src/project/tsconfig.json' (Configured)
 Info 506  [00:10:22.000] 	Files (8)
 	/a/lib/lib.d.ts
@@ -2031,7 +2031,7 @@ Info 543  [00:11:16.000] File '/a/lib/package.json' does not exist according to 
 Info 544  [00:11:17.000] File '/a/package.json' does not exist according to earlier cached lookups.
 Info 545  [00:11:18.000] File '/package.json' does not exist according to earlier cached lookups.
 Info 546  [00:11:19.000] FileWatcher:: Close:: WatchInfo: /src/project/node_modules/pkg3/package.json 2000 undefined Project: /src/project/tsconfig.json WatchType: File location affecting resolution
-Info 547  [00:11:20.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 7 structureChanged: true structureIsReused:: Not Elapsed:: *ms
+Info 547  [00:11:20.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 7 structureChanged: true structureIsReused:: SafeModuleCache Elapsed:: *ms
 Info 548  [00:11:21.000] Project '/src/project/tsconfig.json' (Configured)
 Info 549  [00:11:22.000] 	Files (6)
 	/a/lib/lib.d.ts
@@ -2203,7 +2203,7 @@ Info 614  [00:12:44.000] File '/package.json' does not exist according to earlie
 Info 615  [00:12:45.000] File '/a/lib/package.json' does not exist according to earlier cached lookups.
 Info 616  [00:12:46.000] File '/a/package.json' does not exist according to earlier cached lookups.
 Info 617  [00:12:47.000] File '/package.json' does not exist according to earlier cached lookups.
-Info 618  [00:12:48.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 8 structureChanged: true structureIsReused:: Not Elapsed:: *ms
+Info 618  [00:12:48.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 8 structureChanged: true structureIsReused:: SafeModuleCache Elapsed:: *ms
 Info 619  [00:12:49.000] Project '/src/project/tsconfig.json' (Configured)
 Info 620  [00:12:50.000] 	Files (5)
 	/a/lib/lib.d.ts
@@ -2354,7 +2354,7 @@ Info 668  [00:13:55.000] File '/package.json' does not exist according to earlie
 Info 669  [00:13:56.000] File '/a/lib/package.json' does not exist according to earlier cached lookups.
 Info 670  [00:13:57.000] File '/a/package.json' does not exist according to earlier cached lookups.
 Info 671  [00:13:58.000] File '/package.json' does not exist according to earlier cached lookups.
-Info 672  [00:13:59.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 9 structureChanged: true structureIsReused:: Not Elapsed:: *ms
+Info 672  [00:13:59.000] Finishing updateGraphWorker: Project: /src/project/tsconfig.json Version: 9 structureChanged: true structureIsReused:: SafeModuleCache Elapsed:: *ms
 Info 673  [00:14:00.000] Project '/src/project/tsconfig.json' (Configured)
 Info 674  [00:14:01.000] 	Files (4)
 	/a/lib/lib.d.ts
