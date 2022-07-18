@@ -340,7 +340,7 @@ export function typeDirectiveIsEqualTo(oldResolution: ResolvedTypeReferenceDirec
         !!oldResolution.resolvedTypeReferenceDirective &&
         !!newResolution.resolvedTypeReferenceDirective &&
         oldResolution.resolvedTypeReferenceDirective.resolvedFileName === newResolution.resolvedTypeReferenceDirective.resolvedFileName
-        && oldResolution.resolvedTypeReferenceDirective.primary === newResolution.resolvedTypeReferenceDirective.primary
+        && !!oldResolution.resolvedTypeReferenceDirective.primary === !!newResolution.resolvedTypeReferenceDirective.primary
         && oldResolution.resolvedTypeReferenceDirective.originalPath === newResolution.resolvedTypeReferenceDirective.originalPath;
 }
 

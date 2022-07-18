@@ -1097,7 +1097,7 @@ function createCreateProgramOptions(rootNames: readonly string[], options: Compi
 }
 
 function isOldBuildInfoProgram(program: Program | OldBuildInfoProgram | undefined): program is OldBuildInfoProgram {
-    return !!(program as OldBuildInfoProgram | undefined)?.isBuildInfoProgram;
+    return !!(program as OldBuildInfoProgram | undefined)?.getResolvedModule;
 }
 
 /**
@@ -1133,6 +1133,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
     const { rootNames, options, configFileParsingDiagnostics, projectReferences } = createProgramOptions;
     let { oldProgram: oldProgramOrOldBuildInfoProgram } = createProgramOptions;
     let oldProgram = isOldBuildInfoProgram(oldProgramOrOldBuildInfoProgram) ? undefined : oldProgramOrOldBuildInfoProgram;
+    let oldBuildInfoProgram = isOldBuildInfoProgram(oldProgramOrOldBuildInfoProgram) ? oldProgramOrOldBuildInfoProgram : undefined;
 
     let processingDefaultLibFiles: SourceFile[] | undefined;
     let processingOtherFiles: SourceFile[] | undefined;
@@ -1433,6 +1434,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
 
     // unconditionally set oldProgram to undefined to prevent it from being captured in closure
     oldProgram = undefined;
+    oldBuildInfoProgram = undefined;
     oldProgramOrOldBuildInfoProgram = undefined;
 
     const program: Program = {
@@ -1680,20 +1682,35 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         for (let i = 0; i < moduleNames.length; i++) {
             const moduleName = moduleNames[i];
             // If the source file is unchanged and doesnt have invalidated resolution, reuse the module resolutions
-            if (file === oldSourceFile && !hasInvalidatedResolutions(oldSourceFile.path)) {
+            if (oldBuildInfoProgram || file === oldSourceFile && !hasInvalidatedResolutions(oldSourceFile.path)) {
                 const mode = getModeForUsageLocation(file, moduleName);
-                const oldResolution = oldSourceFile.resolvedModules?.get(moduleName.text, mode);
+                const oldResolution = !oldBuildInfoProgram ? oldSourceFile?.resolvedModules?.get(moduleName.text, mode): oldBuildInfoProgram.getResolvedModule(getDirectoryPath(file.path), moduleName.text, mode);
                 if (oldResolution?.resolvedModule) {
                     if (isTraceEnabled(options, host)) {
-                        trace(host,
-                            oldResolution.resolvedModule.packageId ?
-                                Diagnostics.Reusing_resolution_of_module_0_from_1_of_old_program_it_was_successfully_resolved_to_2_with_Package_ID_3 :
-                                Diagnostics.Reusing_resolution_of_module_0_from_1_of_old_program_it_was_successfully_resolved_to_2,
-                            moduleName.text,
-                            getNormalizedAbsolutePath(file.originalFileName, currentDirectory),
-                            oldResolution.resolvedModule.resolvedFileName,
-                            oldResolution.resolvedModule.packageId && packageIdToString(oldResolution.resolvedModule.packageId)
-                        );
+                        const fileLocation = getNormalizedAbsolutePath(file.originalFileName, currentDirectory);
+                        if (!oldBuildInfoProgram) {
+                            trace(host,
+                                oldResolution.resolvedModule.packageId ?
+                                    Diagnostics.Reusing_resolution_of_module_0_from_1_of_old_program_it_was_successfully_resolved_to_2_with_Package_ID_3 :
+                                    Diagnostics.Reusing_resolution_of_module_0_from_1_of_old_program_it_was_successfully_resolved_to_2,
+                                moduleName.text,
+                                fileLocation,
+                                oldResolution.resolvedModule.resolvedFileName,
+                                oldResolution.resolvedModule.packageId && packageIdToString(oldResolution.resolvedModule.packageId)
+                            );
+                        }
+                        else {
+                            trace(host,
+                                oldResolution.resolvedModule.packageId ?
+                                    Diagnostics.Reusing_resolution_of_module_0_from_1_found_in_cache_from_location_2_it_was_successfully_resolved_to_3_with_Package_ID_4 :
+                                    Diagnostics.Reusing_resolution_of_module_0_from_1_found_in_cache_from_location_2_it_was_successfully_resolved_to_3,
+                                moduleName.text,
+                                fileLocation,
+                                getDirectoryPath(fileLocation),
+                                oldResolution.resolvedModule.resolvedFileName,
+                                oldResolution.resolvedModule.packageId && packageIdToString(oldResolution.resolvedModule.packageId)
+                            );
+                        }
                     }
                     (result ??= new Array(moduleNames.length))[i] = oldResolution;
                     (reusedNames ??= []).push(moduleName);
@@ -1790,24 +1807,22 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         }
 
         const oldSourceFile = !isString(containingFile) ? oldProgram && oldProgram.getSourceFile(containingFile.fileName) : undefined;
-        if (!isString(containingFile)) {
-            if (oldSourceFile !== containingFile && containingFile.resolvedTypeReferenceDirectiveNames) {
-                // `file` was created for the new program.
-                //
-                // We only set `file.resolvedTypeReferenceDirectiveNames` via work from the current function,
-                // so it is defined iff we already called the current function on `file`.
-                // That call happened no later than the creation of the `file` object,
-                // which per above occurred during the current program creation.
-                // Since we assume the filesystem does not change during program creation,
-                // it is safe to reuse resolutions from the earlier call.
-                const result: ResolvedTypeReferenceDirectiveWithFailedLookupLocations[] = [];
-                for (const typeDirectiveName of typeDirectiveNames as readonly FileReference[]) {
-                    // We lower-case all type references because npm automatically lowercases all packages. See GH#9824.
-                    const resolvedTypeReferenceDirective = containingFile.resolvedTypeReferenceDirectiveNames.get(getResolutionName(typeDirectiveName), typeDirectiveName.resolutionMode || containingFile.impliedNodeFormat)!;
-                    result.push(resolvedTypeReferenceDirective);
-                }
-                return result;
+        if (!isString(containingFile) && oldSourceFile !== containingFile && containingFile.resolvedTypeReferenceDirectiveNames) {
+            // `file` was created for the new program.
+            //
+            // We only set `file.resolvedTypeReferenceDirectiveNames` via work from the current function,
+            // so it is defined iff we already called the current function on `file`.
+            // That call happened no later than the creation of the `file` object,
+            // which per above occurred during the current program creation.
+            // Since we assume the filesystem does not change during program creation,
+            // it is safe to reuse resolutions from the earlier call.
+            const result: ResolvedTypeReferenceDirectiveWithFailedLookupLocations[] = [];
+            for (const typeDirectiveName of typeDirectiveNames as readonly FileReference[]) {
+                // We lower-case all type references because npm automatically lowercases all packages. See GH#9824.
+                const resolvedTypeReferenceDirective = containingFile.resolvedTypeReferenceDirectiveNames.get(getResolutionName(typeDirectiveName), typeDirectiveName.resolutionMode || containingFile.impliedNodeFormat)!;
+                result.push(resolvedTypeReferenceDirective);
             }
+            return result;
         }
 
         /** An ordered list of module names for which we cannot recover the resolution. */
@@ -1815,26 +1830,43 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         let result: ResolvedTypeReferenceDirectiveWithFailedLookupLocations[] | undefined;
         let reusedNames: (string | FileReference)[] | undefined;
         const containingSourceFile = !isString(containingFile) ? containingFile : undefined;
-        const canReuseResolutions = !isString(containingFile) ?
+        const canReuseResolutions = oldBuildInfoProgram || (!isString(containingFile) ?
             containingFile === oldSourceFile && !hasInvalidatedResolutions(oldSourceFile.path) :
-            !hasInvalidatedResolutions(toPath(containingFile));
+            !hasInvalidatedResolutions(toPath(containingFile)));
         for (let i = 0; i < typeDirectiveNames.length; i++) {
             const entry = typeDirectiveNames[i];
             if (canReuseResolutions) {
                 const typeDirectiveName = getResolutionName(entry);
                 const mode = getModeForFileReference(entry, containingSourceFile?.impliedNodeFormat);
-                const oldResolution = (!isString(containingFile) ? oldSourceFile?.resolvedTypeReferenceDirectiveNames : oldProgram?.getAutomaticTypeDirectiveResolutions())?.get(typeDirectiveName, mode);
+                const oldResolution = !oldBuildInfoProgram ?
+                    (!isString(containingFile) ? oldSourceFile?.resolvedTypeReferenceDirectiveNames : oldProgram?.getAutomaticTypeDirectiveResolutions())?.get(typeDirectiveName, mode) :
+                    oldBuildInfoProgram.getResolvedTypeReferenceDirective(getDirectoryPath(!isString(containingFile) ? containingFile.path : toPath(containingFile)), typeDirectiveName, mode);
                 if (oldResolution?.resolvedTypeReferenceDirective) {
                     if (isTraceEnabled(options, host)) {
-                        trace(host,
-                            oldResolution.resolvedTypeReferenceDirective.packageId ?
-                                Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_of_old_program_it_was_successfully_resolved_to_2_with_Package_ID_3 :
-                                Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_of_old_program_it_was_successfully_resolved_to_2,
-                            typeDirectiveName,
-                            !isString(containingFile) ? getNormalizedAbsolutePath(containingFile.originalFileName, currentDirectory) : containingFile,
-                            oldResolution.resolvedTypeReferenceDirective.resolvedFileName,
-                            oldResolution.resolvedTypeReferenceDirective.packageId && packageIdToString(oldResolution.resolvedTypeReferenceDirective.packageId)
-                        );
+                        const fileLocation = !isString(containingFile) ? getNormalizedAbsolutePath(containingFile.originalFileName, currentDirectory) : containingFile;
+                        if (!oldBuildInfoProgram) {
+                            trace(host,
+                                oldResolution.resolvedTypeReferenceDirective.packageId ?
+                                    Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_of_old_program_it_was_successfully_resolved_to_2_with_Package_ID_3 :
+                                    Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_of_old_program_it_was_successfully_resolved_to_2,
+                                typeDirectiveName,
+                                fileLocation,
+                                oldResolution.resolvedTypeReferenceDirective.resolvedFileName,
+                                oldResolution.resolvedTypeReferenceDirective.packageId && packageIdToString(oldResolution.resolvedTypeReferenceDirective.packageId)
+                            );
+                        }
+                        else {
+                            trace(host,
+                                oldResolution.resolvedTypeReferenceDirective.packageId ?
+                                    Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_found_in_cache_from_location_2_it_was_successfully_resolved_to_3_with_Package_ID_4 :
+                                    Diagnostics.Reusing_resolution_of_type_reference_directive_0_from_1_found_in_cache_from_location_2_it_was_successfully_resolved_to_3,
+                                typeDirectiveName,
+                                fileLocation,
+                                getDirectoryPath(fileLocation),
+                                oldResolution.resolvedTypeReferenceDirective.resolvedFileName,
+                                oldResolution.resolvedTypeReferenceDirective.packageId && packageIdToString(oldResolution.resolvedTypeReferenceDirective.packageId)
+                            );
+                        }
                     }
                     (result ??= new Array(typeDirectiveNames.length))[i] = oldResolution;
                     (reusedNames ??= []).push(entry);

@@ -28,6 +28,7 @@ export interface ReadBuildProgramHost {
     useCaseSensitiveFileNames(): boolean;
     getCurrentDirectory(): string;
     readFile(fileName: string): string | undefined;
+    fileExists?(fileName: string): boolean;
     /** @internal */
     getBuildInfo?(fileName: string, configFilePath: string | undefined): BuildInfo | undefined;
 }
@@ -45,7 +46,7 @@ export function readBuilderProgram(compilerOptions: CompilerOptions, host: ReadB
         buildInfo = getBuildInfo(buildInfoPath, content);
     }
     if (!buildInfo || buildInfo.version !== version || !buildInfo.program) return undefined;
-    return createBuilderProgramUsingProgramBuildInfo(buildInfo, buildInfoPath, host);
+    return createBuilderProgramUsingProgramBuildInfo(buildInfo, buildInfoPath, host, compilerOptions.configFilePath);
 }
 
 export function createIncrementalCompilerHost(options: CompilerOptions, system = sys): CompilerHost {
