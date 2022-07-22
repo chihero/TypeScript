@@ -1,5 +1,5 @@
 import * as Utils from "../../_namespaces/Utils";
-import { getFsWithNode16, getFsWithOut, getPkgImportContent, getPkgTypeRefContent } from "../tsbuild/cacheResolutionsHelper";
+import { getFsWithNode16, getFsWithOut, getFsWithSameResolutionFromMultiplePlaces, getPkgImportContent, getPkgTypeRefContent } from "../tsbuild/cacheResolutionsHelper";
 import { loadProjectFromFiles, noChangeRun, prependText, verifyTscWithEdits } from "./helpers";
 
 describe("unittests:: tsc:: cacheResolutions::", () => {
@@ -160,6 +160,33 @@ describe("unittests:: tsc:: cacheResolutions::", () => {
                 subScenario: "modify randomFileForImport by adding import",
                 modifyFs: fs => prependText(fs, "/src/project/randomFileForImport.ts", `import * as me from "@this/package";\n`),
             }
+        ]
+    });
+
+    verifyTscWithEdits({
+        scenario: "cacheResolutions",
+        subScenario: "multiple places",
+        fs: getFsWithSameResolutionFromMultiplePlaces,
+        commandLineArgs: ["-p", "/src/project", "--explainFiles"],
+        edits: [
+            {
+                subScenario: "modify randomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+            },
+            {
+                subScenario: "modify b/randomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/b/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+                discrepancyExplanation: () => [
+                    "Resolution is not reused in incremental which is TODO (shkamat)"
+                ]
+            },
+            {
+                subScenario: "modify c/ca/caa/randomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/c/ca/caa/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+                discrepancyExplanation: () => [
+                    "Resolution is not reused in incremental which is TODO (shkamat)"
+                ]
+            },
         ]
     });
 });
