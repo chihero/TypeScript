@@ -101,8 +101,8 @@ export interface ReusableBuilderProgramState extends BuilderState {
      */
     bundle?: BundleBuildInfo;
     cacheResolutions?: {
-        modules: CacheWithRedirects<ModeAwareCache<ResolvedModuleWithFailedLookupLocations>, Path> | undefined;
-        typeRefs: CacheWithRedirects<ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>, Path> | undefined;
+        modules: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
+        typeRefs: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
     };
     resuableCacheResolutions?: {
         cache: ProgramBuildInfoCacheResolutions;
@@ -1282,7 +1282,7 @@ function getBuildInfo(
     }
 
     function toProgramBuildInfoResolutionCacheWithRedirects<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
-        cache: CacheWithRedirects<ModeAwareCache<T>, Path> | undefined
+        cache: CacheWithRedirects<Path, ModeAwareCache<T>> | undefined
     ): ProgramBuildInfoResolutionCacheWithRedirects | undefined {
         if (!cache) return undefined;
         const ownMap = cache.getOwnMap();
@@ -1374,8 +1374,8 @@ function getBuildInfo(
 
 function getCacheResolutions(state: BuilderProgramState, getCanonicalFileName: GetCanonicalFileName) {
     if (state.cacheResolutions || !state.compilerOptions.cacheResolutions) return state.cacheResolutions;
-    let modules: CacheWithRedirects<ModeAwareCache<ResolvedModuleWithFailedLookupLocations>, Path> | undefined;
-    let typeRefs: CacheWithRedirects<ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>, Path> | undefined;
+    let modules: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
+    let typeRefs: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
     state.program!.getSourceFiles().forEach(f => {
         modules = toPerDirectoryCache(state, modules, f, f.resolvedModules);
         typeRefs = toPerDirectoryCache(state, typeRefs, f, f.resolvedTypeReferenceDirectiveNames);
@@ -1392,10 +1392,10 @@ function getCacheResolutions(state: BuilderProgramState, getCanonicalFileName: G
 
 function toPerDirectoryCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
     state: BuilderProgramState,
-    cacheWithRedirects: CacheWithRedirects<ModeAwareCache<T>, Path> | undefined,
+    cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<T>> | undefined,
     fOrDirPath: SourceFile | Path,
     cache: ModeAwareCache<T> | undefined,
-): CacheWithRedirects<ModeAwareCache<T>, Path> | undefined {
+): CacheWithRedirects<Path, ModeAwareCache<T>> | undefined {
     if (!cache?.size()) return cacheWithRedirects;
     let dirPath: Path, redirectedReference: ResolvedProjectReference | undefined;
     if (!isString(fOrDirPath)) {
@@ -2044,9 +2044,9 @@ export function createOldBuildInfoProgram(
     type Resolution = ResolvedModuleWithFailedLookupLocations & ResolvedTypeReferenceDirectiveWithFailedLookupLocations;
     type ResolutionEntry = [name: string, resolutionId: ProgramBuildInfoResolutionId, mode: ResolutionMode];
     type BuildInfoResolutionEntriesOrModeAwareCache = readonly ProgramBuildInfoResolutionEntryId[] | ModeAwareCache<ProgramBuildInfoResolutionId>;
-        type DecodedResolvedMap = CacheWithRedirects<BuildInfoResolutionEntriesOrModeAwareCache, Path>;
-        const decodedResolvedModules: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
-        const decodedResolvedTypeRefs: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
+    type DecodedResolvedMap = CacheWithRedirects<Path, BuildInfoResolutionEntriesOrModeAwareCache>;
+    const decodedResolvedModules: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
+    const decodedResolvedTypeRefs: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
 
     let resolutions: (Resolution | false)[] | undefined;
     let resolutionEntries: ResolutionEntry[] | undefined;
@@ -2078,7 +2078,7 @@ export function createOldBuildInfoProgram(
     }
 
     function getResolvedFromCache(
-        cache: CacheWithRedirects<ModeAwareCache<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>, Path> | undefined,
+        cache: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined,
         reusableCache: ProgramBuildInfoResolutionCacheWithRedirects | undefined,
         decodedReusableCache: DecodedResolvedMap,
         dirPath: Path,

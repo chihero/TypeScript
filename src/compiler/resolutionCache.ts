@@ -10,6 +10,7 @@ import {
     ignoredPaths, inferredTypesContainingFile, isEmittedFileOfProgram, isExternalModuleNameRelative,
     isExternalOrCommonJsModule, isNodeModulesDirectory, isRootedDiskPath, isString, isStringLiteralLike, isTraceEnabled,
     length, loadModuleFromGlobalCache, memoize, MinimalResolutionCacheHost, ModeAwareCache,
+    ModeAwareCacheKey,
     ModuleResolutionCache, ModuleResolutionHost, ModuleResolutionInfo, mutateMap, noopFileWatcher, normalizePath,
     PackageId, packageIdToString, parseNodeModuleFromPath, Path, pathContainsNodeModules, PerModuleNameCache, Program,
     removeSuffix, removeTrailingDirectorySeparator, resolutionExtensionIsTSOrJson, ResolutionMode, ResolvedModuleFull,
@@ -222,8 +223,8 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
     // The key in the map is source file's path.
     // The values are Map of resolutions with key being name lookedup.
     const resolvedModuleNames = new Map<Path, ModeAwareCache<CachedResolvedModuleWithFailedLookupLocations>>();
-    const perDirectoryResolvedModuleNames: CacheWithRedirects<ModeAwareCache<CachedResolvedModuleWithFailedLookupLocations>> = createCacheWithRedirects();
-    const nonRelativeModuleNameCache: CacheWithRedirects<PerModuleNameCache> = createCacheWithRedirects();
+    const perDirectoryResolvedModuleNames: CacheWithRedirects<Path, ModeAwareCache<CachedResolvedModuleWithFailedLookupLocations>> = createCacheWithRedirects();
+    const nonRelativeModuleNameCache: CacheWithRedirects<ModeAwareCacheKey, PerModuleNameCache> = createCacheWithRedirects();
     const moduleResolutionCache = createModuleResolutionCache(
         getCurrentDirectory(),
         resolutionHost.getCanonicalFileName,
@@ -233,7 +234,7 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
     );
 
     const resolvedTypeReferenceDirectives = new Map<Path, ModeAwareCache<CachedResolvedTypeReferenceDirectiveWithFailedLookupLocations>>();
-    const perDirectoryResolvedTypeReferenceDirectives: CacheWithRedirects<ModeAwareCache<CachedResolvedTypeReferenceDirectiveWithFailedLookupLocations>> = createCacheWithRedirects();
+    const perDirectoryResolvedTypeReferenceDirectives: CacheWithRedirects<Path, ModeAwareCache<CachedResolvedTypeReferenceDirectiveWithFailedLookupLocations>> = createCacheWithRedirects();
     const typeReferenceDirectiveResolutionCache = createTypeReferenceDirectiveResolutionCache(
         getCurrentDirectory(),
         resolutionHost.getCanonicalFileName,
@@ -447,7 +448,7 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
         containingFile: string;
         redirectedReference: ResolvedProjectReference | undefined;
         cache: Map<Path, ModeAwareCache<T>>;
-        perDirectoryCacheWithRedirects: CacheWithRedirects<ModeAwareCache<T>>;
+        perDirectoryCacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<T>>;
         loader: (name: string, containingFile: string, options: CompilerOptions, host: ModuleResolutionHost, redirectedReference?: ResolvedProjectReference, containingSourceFile?: SourceFile, resolutionMode?: ResolutionMode) => T;
         getResolutionWithResolvedFileName: GetResolutionWithResolvedFileName<T, R>;
         shouldRetryResolution: (t: T) => boolean;
