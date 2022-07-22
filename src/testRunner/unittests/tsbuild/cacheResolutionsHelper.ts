@@ -1,5 +1,5 @@
 import * as Utils from "../../_namespaces/Utils";
-import { createServerHost, createWatchedSystem, libFile, TestServerHost } from "../virtualFileSystemWithWatch";
+import { createServerHost, createWatchedSystem, libFile } from "../virtualFileSystemWithWatch";
 import { loadProjectFromFiles } from "../tsc/helpers";
 import { solutionBuildWithBaseline } from "../tscWatch/helpers";
 
@@ -27,7 +27,7 @@ export function getPkgTypeRefContent(type: "Import" | "Require", pkg: number) {
             }
         `;
 }
-export function getFsMapWithNode16(): { [path: string]: string; } {
+function getFsMapWithNode16(): { [path: string]: string; } {
     return {
         "/src/project/tsconfig.json": JSON.stringify({
             compilerOptions: {
@@ -82,20 +82,18 @@ export function getServerHostWithNode16() {
 }
 
 export function getWatchSystemWithNode16WithBuild() {
-    return getSystemWithBuild(getWatchSystemWithNode16);
-}
-
-export function getServerHostWithNode16WithBuild() {
-    return getSystemWithBuild(getServerHostWithNode16);
-}
-
-function getSystemWithBuild(createSystem: () => TestServerHost) {
-    const system = createSystem();
+    const system = getWatchSystemWithNode16();
     solutionBuildWithBaseline(system, ["/src/project"]);
     return system;
 }
 
-export function getFsMapWithOut(): { [path: string]: string; } {
+export function getServerHostWithNode16WithBuild() {
+    const system = getServerHostWithNode16();
+    solutionBuildWithBaseline(system, ["/src/project"]);
+    return system;
+}
+
+function getFsMapWithOut(): { [path: string]: string; } {
     return {
         "/src/project/tsconfig.json": JSON.stringify({
             compilerOptions: {
@@ -143,9 +141,96 @@ export function getServerHostWithOut() {
 }
 
 export function getWatchSystemWithOutWithBuild() {
-    return getSystemWithBuild(getWatchSystemWithOut);
+    const system = getWatchSystemWithOut();
+    solutionBuildWithBaseline(system, ["/src/project"]);
+    return system;
 }
 
 export function getServerHostWithOutWithBuild() {
-    return getSystemWithBuild(getServerHostWithOut);
+    const system = getServerHostWithOut();
+    solutionBuildWithBaseline(system, ["/src/project"]);
+    return system;
+}
+
+function getFsMapWithMultipleProjects(): { [path: string]: string; } {
+    return {
+        "/src/project/tsconfig.a.json": JSON.stringify({
+            compilerOptions: {
+                composite: true,
+                cacheResolutions: true,
+                traceResolution: true,
+            },
+            files: ["aFileWithImports.ts", "aRandomFileForImport.ts", "aRandomFileForImport2.ts"],
+        }),
+        "/src/project/aFileWithImports.ts": Utils.dedent`
+            import type { ImportInterface0 } from "pkg0";
+            export { x } from "./aRandomFileForImport";
+            export { x as x2 } from "./aRandomFileForImport2";
+            export const y = 10;
+        `,
+        "/src/project/aRandomFileForImport.ts": getRandomFileContent(),
+        "/src/project/aRandomFileForImport2.ts": getRandomFileContent(),
+        "/src/project/node_modules/pkg0/index.d.ts": getPkgImportContent("Import", 0),
+        "/src/project/tsconfig.b.json": JSON.stringify({
+            compilerOptions: {
+                composite: true,
+                cacheResolutions: true,
+                traceResolution: true,
+            },
+            files: ["bFileWithImports.ts", "bRandomFileForImport.ts", "bRandomFileForImport2.ts"],
+            references: [{ path: "./tsconfig.a.json" }]
+        }),
+        "/src/project/bFileWithImports.ts": Utils.dedent`
+            export { y } from "./aFileWithImports";
+            export { x } from "./bRandomFileForImport";
+            import type { ImportInterface0 } from "pkg0";
+        `,
+        "/src/project/bRandomFileForImport.ts": getRandomFileContent(),
+        "/src/project/bRandomFileForImport2.ts": getRandomFileContent(),
+        "/src/project/tsconfig.json": JSON.stringify({
+            compilerOptions: {
+                composite: true,
+                cacheResolutions: true,
+                traceResolution: true,
+                module: "amd"
+            },
+            files: ["cFileWithImports.ts", "cRandomFileForImport.ts", "cRandomFileForImport2.ts"],
+            references: [{ path: "./tsconfig.a.json" }, { path: "./tsconfig.b.json" }]
+        }),
+        "/src/project/cFileWithImports.ts": Utils.dedent`
+            import { y } from "./bFileWithImports";
+            import type { ImportInterface0 } from "pkg0";
+        `,
+        "/src/project/cRandomFileForImport.ts": getRandomFileContent(),
+        "/src/project/cRandomFileForImport2.ts": getRandomFileContent(),
+        "/src/project/pkg0.d.ts": getPkgImportContent("Import", 0),
+    };
+}
+
+export function getFsWithMultipleProjects() {
+    return loadProjectFromFiles(getFsMapWithMultipleProjects());
+}
+
+export function getWatchSystemWithMultipleProjects() {
+    const system = createWatchedSystem(getFsMapWithMultipleProjects(), { currentDirectory: "/src/project" });
+    system.ensureFileOrFolder(libFile);
+    return system;
+}
+
+export function getServerHostWithMultipleProjects() {
+    const system = createServerHost(getFsMapWithMultipleProjects(), { currentDirectory: "/src/project" });
+    system.writeFile(libFile.path, libFile.content);
+    return system;
+}
+
+export function getWatchSystemWithMultipleProjectsWithBuild() {
+    const system = getWatchSystemWithMultipleProjects();
+    solutionBuildWithBaseline(system, ["/src/project"]);
+    return system;
+}
+
+export function getServerHostWithMultipleProjectsWithBuild() {
+    const system = getServerHostWithMultipleProjects();
+    solutionBuildWithBaseline(system, ["/src/project"]);
+    return system;
 }

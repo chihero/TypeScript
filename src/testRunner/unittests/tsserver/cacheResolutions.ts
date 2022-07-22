@@ -4,7 +4,7 @@ import * as Utils from "../../_namespaces/Utils";
 import { createServerHost, File, getTsBuildProjectFile, libFile, TestServerHost } from "../virtualFileSystemWithWatch";
 import { solutionBuildWithBaseline } from "../tscWatch/helpers";
 import { createLoggerWithInMemoryLogs, createSession, openFilesForSession, baselineTsserverLogs } from "./helpers";
-import { getPkgImportContent, getServerHostWithNode16, getServerHostWithNode16WithBuild, getServerHostWithOut, getServerHostWithOutWithBuild } from "../tsbuild/cacheResolutionsHelper";
+import { getPkgImportContent, getServerHostWithMultipleProjects, getServerHostWithMultipleProjectsWithBuild, getServerHostWithNode16, getServerHostWithNode16WithBuild, getServerHostWithOut, getServerHostWithOutWithBuild } from "../tsbuild/cacheResolutionsHelper";
 
 describe("unittests:: tsserver:: cacheResolutions:: tsserverProjectSystem caching module resolutions option", () => {
     describe("multi file project", () => {
@@ -141,6 +141,36 @@ describe("unittests:: tsserver:: cacheResolutions:: tsserverProjectSystem cachin
                 host.deleteFile("/src/project/node_modules/pkg2/index.d.ts");
                 host.runQueuedTimeoutCallbacks();
 
+                baselineTsserverLogs("cacheResolutions", scenario, session);
+            });
+        }
+    });
+
+    describe("multi project", () => {
+        verifyTsserverWithMultiProject("multi project not built", getServerHostWithMultipleProjects, "bRandomFileForImport", "/src/project/tsconfig.b.json");
+        verifyTsserverWithMultiProject("multi project mixed redirect options not built", getServerHostWithMultipleProjects, "cRandomFileForImport");
+        verifyTsserverWithMultiProject("multi project", getServerHostWithMultipleProjectsWithBuild, "bRandomFileForImport", "/src/project/tsconfig.b.json");
+        verifyTsserverWithMultiProject("multi project mixed redirect options", getServerHostWithMultipleProjectsWithBuild, "cRandomFileForImport");
+        function verifyTsserverWithMultiProject(scenario: string, createHost: () => TestServerHost, file: string, project?: string) {
+            it(scenario, () => {
+                const host = fakes.patchHostForBuildInfoReadWrite(createHost());
+                const session = createSession(host, { logger: createLoggerWithInMemoryLogs(host) });
+                openFilesForSession([`/src/project/${file}.ts`], session);
+
+                session.logger.info(`modify ${file} by adding import`);
+                session.executeCommandSeq<ts.server.protocol.ChangeRequest>({
+                    command: ts.server.protocol.CommandTypes.Change,
+                    arguments: {
+                        file: `/src/project/${file}.ts`,
+                        line: 1,
+                        offset: 1,
+                        endLine: 1,
+                        endOffset: 1,
+                        insertString: `export type { ImportInterface0 } from "pkg0";\n`,
+                    }
+                });
+                if (project) ts.server.updateProjectIfDirty(session.getProjectService().configuredProjects.get(project)!);
+                ts.server.updateProjectIfDirty(session.getProjectService().configuredProjects.get("/src/project/tsconfig.json")!);
                 baselineTsserverLogs("cacheResolutions", scenario, session);
             });
         }

@@ -1,5 +1,6 @@
+import * as ts from "../../_namespaces/ts";
 import { noChangeRun, noChangeWithExportsDiscrepancyRun, prependText, verifyTscWithEdits } from "../tsc/helpers";
-import { getFsWithNode16, getFsWithOut, getPkgImportContent, getPkgTypeRefContent } from "./cacheResolutionsHelper";
+import { getFsWithMultipleProjects, getFsWithNode16, getFsWithOut, getPkgImportContent, getPkgTypeRefContent } from "./cacheResolutionsHelper";
 
 describe("unittests:: tsbuild:: cacheResolutions::", () => {
     verifyTscWithEdits({
@@ -54,6 +55,63 @@ describe("unittests:: tsbuild:: cacheResolutions::", () => {
             {
                 subScenario: "modify randomFileForTypeRef by adding typeRef",
                 modifyFs: fs => prependText(fs, "/src/project/randomFileForTypeRef.ts", `/// <reference types="pkg2"/>\n`),
+            },
+        ]
+    });
+
+    verifyTscWithEdits({
+        scenario: "cacheResolutions",
+        subScenario: "multi project",
+        fs: getFsWithMultipleProjects,
+        commandLineArgs: ["-b", "/src/project", "--explainFiles", "--v"],
+        edits: [
+            {
+                subScenario: "modify aRandomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/aRandomFileForImport.ts", `export type { ImportInterface0 } from "pkg0";\n`),
+            },
+            {
+                subScenario: "modify bRandomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/bRandomFileForImport.ts", `export type { ImportInterface0 } from "pkg0";\n`),
+            },
+            {
+                subScenario: "modify cRandomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/cRandomFileForImport.ts", `export type { ImportInterface0 } from "pkg0";\n`),
+            },
+            {
+                subScenario: "Project build on B",
+                modifyFs: ts.noop,
+                commandLineArgs: ["-p", "/src/project/tsconfig.b.json", "--explainFiles"],
+                discrepancyExplanation: () => [
+                    "During incremental build, build succeeds because everything was built",
+                    "Clean build does not have project build from a so it errors and has extra errors and incorrect buildinfo",
+                ]
+            },
+            {
+                subScenario: "modify bRandomFileForImport2 by adding import and project build",
+                modifyFs: fs => prependText(fs, "/src/project/bRandomFileForImport2.ts", `export type { ImportInterface0 } from "pkg0";\n`),
+                commandLineArgs: ["-p", "/src/project/tsconfig.b.json", "--explainFiles"],
+                discrepancyExplanation: () => [
+                    "During incremental build, build succeeds because everything was built",
+                    "Clean build does not have project build from a so it errors and has extra errors and incorrect buildinfo",
+                ]
+            },
+            {
+                subScenario: "Project build on c",
+                modifyFs: ts.noop,
+                commandLineArgs: ["-p", "/src/project", "--explainFiles"],
+                discrepancyExplanation: () => [
+                    "During incremental build, build succeeds because everything was built",
+                    "Clean build does not have project build from a and b so it errors and has extra errors and incorrect buildinfo",
+                ]
+            },
+            {
+                subScenario: "modify cRandomFileForImport2 by adding import and project build",
+                modifyFs: fs => prependText(fs, "/src/project/cRandomFileForImport2.ts", `export type { ImportInterface0 } from "pkg0";\n`),
+                commandLineArgs: ["-p", "/src/project", "--explainFiles"],
+                discrepancyExplanation: () => [
+                    "During incremental build, build succeeds because everything was built",
+                    "Clean build does not have project build from a and b so it errors and has extra errors and incorrect buildinfo",
+                ]
             },
         ]
     });

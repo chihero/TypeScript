@@ -1,4 +1,4 @@
-import { getPkgImportContent, getPkgTypeRefContent, getWatchSystemWithNode16, getWatchSystemWithNode16WithBuild, getWatchSystemWithOut, getWatchSystemWithOutWithBuild } from "../tsbuild/cacheResolutionsHelper";
+import { getPkgImportContent, getPkgTypeRefContent, getWatchSystemWithMultipleProjectsWithBuild, getWatchSystemWithNode16, getWatchSystemWithNode16WithBuild, getWatchSystemWithOut, getWatchSystemWithOutWithBuild } from "../tsbuild/cacheResolutionsHelper";
 import { TestServerHost } from "../virtualFileSystemWithWatch";
 import { verifyTscWatch } from "./helpers";
 
@@ -121,6 +121,26 @@ describe("unittests:: tsc-watch:: cacheResolutions::", () => {
                     {
                         caption: "delete resolved typeRef file",
                         change: sys => sys.deleteFile("/src/project/node_modules/pkg2/index.d.ts"),
+                        timeouts: sys => sys.runQueuedTimeoutCallbacks(),
+                    },
+                ]
+            });
+        }
+    });
+
+    describe("multi project", () => {
+        verifyTscWatchMultiProject("multi project", "/src/project/tsconfig.b.json", "bRandomFileForImport");
+        verifyTscWatchMultiProject("multi project mixed redirect options", "/src/project", "cRandomFileForImport");
+        function verifyTscWatchMultiProject(subScenario: string, project: string, file: string) {
+            verifyTscWatch({
+                scenario: "cacheResolutions",
+                subScenario,
+                sys: getWatchSystemWithMultipleProjectsWithBuild,
+                commandLineArgs: ["-p", project, "-w", "--explainFiles"],
+                changes: [
+                    {
+                        caption: `modify ${file} by adding import`,
+                        change: sys => sys.prependFile(`/src/project/${file}.ts`, `export type { ImportInterface0 } from "pkg0";\n`),
                         timeouts: sys => sys.runQueuedTimeoutCallbacks(),
                     },
                 ]

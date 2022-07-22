@@ -357,6 +357,8 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
         // (between startCachingPerDirectoryResolution and finishCachingPerDirectoryResolution)
         nonRelativeExternalModuleResolutions.forEach(watchFailedLookupLocationOfNonRelativeModuleResolutions);
         nonRelativeExternalModuleResolutions.clear();
+        moduleResolutionCache.update(resolutionHost.getCompilationSettings());
+        typeReferenceDirectiveResolutionCache.update(resolutionHost.getCompilationSettings());
     }
 
     function finishCachingPerDirectoryResolution(newProgram: Program | undefined, oldProgram: Program | undefined) {

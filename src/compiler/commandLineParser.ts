@@ -2702,6 +2702,9 @@ export function convertToOptionsWithAbsolutePaths(options: CompilerOptions, toAb
     if (result.configFilePath) {
         result.configFilePath = toAbsolutePath(result.configFilePath);
     }
+    if (result.pathsBasePath) {
+        result.pathsBasePath = toAbsolutePath(result.pathsBasePath);
+    }
     return result;
 }
 
