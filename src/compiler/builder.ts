@@ -13,6 +13,7 @@ import {
     isDeclarationFileName, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, memoize, ModeAwareCache, MoreAwareCacheEntry, noop, notImplemented,
     OldBuildInfoProgram,
     outFile, Path, Program, ProjectReference, ReadBuildProgramHost, ReadonlyCollection,
+    ResolutionDiagnostic,
     ResolutionMode,
     ResolvedModuleFull,
     ResolvedModuleWithFailedLookupLocations,
@@ -396,7 +397,7 @@ function getEmitSignatureFromOldSignature(options: CompilerOptions, oldOptions: 
         isString(oldEmitSignature) ? [oldEmitSignature] : oldEmitSignature[0];
 }
 
-function convertToDiagnostics(diagnostics: readonly ReusableDiagnostic[], newProgram: Program | undefined, getCanonicalFileName: GetCanonicalFileName | undefined): readonly Diagnostic[] {
+function convertToDiagnostics(diagnostics: readonly ReusableDiagnostic[], newProgram: Program, getCanonicalFileName: GetCanonicalFileName | undefined): readonly Diagnostic[] {
     if (!diagnostics.length) return emptyArray;
     let buildInfoDirectory: string | undefined;
     return diagnostics.map(diagnostic => {
@@ -415,16 +416,16 @@ function convertToDiagnostics(diagnostics: readonly ReusableDiagnostic[], newPro
     });
 
     function toPath(path: string) {
-        buildInfoDirectory ??= getDirectoryPath(getNormalizedAbsolutePath(getTsBuildInfoEmitOutputFilePath(newProgram!.getCompilerOptions())!, newProgram!.getCurrentDirectory()));
+        buildInfoDirectory ??= getDirectoryPath(getNormalizedAbsolutePath(getTsBuildInfoEmitOutputFilePath(newProgram.getCompilerOptions())!, newProgram.getCurrentDirectory()));
         return ts.toPath(path, buildInfoDirectory, getCanonicalFileName!);
     }
 }
 
-function convertToDiagnosticRelatedInformation(diagnostic: ReusableDiagnosticRelatedInformation, newProgram: Program | undefined, toPath: (path: string) => Path): DiagnosticRelatedInformation {
+function convertToDiagnosticRelatedInformation(diagnostic: ReusableDiagnosticRelatedInformation, newProgram: Program, toPath: (path: string) => Path): DiagnosticRelatedInformation {
     const { file } = diagnostic;
     return {
         ...diagnostic,
-        file: file ? newProgram!.getSourceFileByPath(toPath(file)) : undefined
+        file: file ? newProgram.getSourceFileByPath(toPath(file)) : undefined
     };
 }
 
@@ -903,12 +904,18 @@ export type ProgramBuildInfoResolvedModuleFull = Omit<ResolvedModuleFull, "resol
 /** @internal */
 export type ProgramBuildInfoResolvedTypeReferenceDirective = Omit<ResolvedTypeReferenceDirective, "resolvedFileName" | "isExternalLibraryImport" | "originalPath" | "primary"> & ProgramBuildInfoResolutionBase;
 /** @internal */
+export interface ProgramBuildInfoResolutionDiagnostic {
+    isImports: true | undefined;
+    entry: string | undefined;
+    packagePath: ProgramBuildInfoAbsoluteFileId;
+}
+/** @internal */
 export interface ProgramBuildInfoResolution {
     readonly resolvedModule: ProgramBuildInfoResolvedModuleFull | undefined;
     readonly resolvedTypeReferenceDirective: ProgramBuildInfoResolvedTypeReferenceDirective | undefined;
     readonly failedLookupLocations: readonly ProgramBuildInfoAbsoluteFileId[] | undefined;
     readonly affectingLocations: readonly ProgramBuildInfoAbsoluteFileId[] | undefined;
-    readonly resolutionDiagnostics: readonly ReusableDiagnostic[] | undefined;
+    readonly resolutionDiagnostics: readonly ProgramBuildInfoResolutionDiagnostic[] | undefined;
 }
 /** @internal */
 export type ProgramBuildInfoResolutionId = number & { __programBuildInfoResolutionIdBrand: any };
@@ -1339,7 +1346,7 @@ function getBuildInfo(
             resolvedTypeReferenceDirective: toProgramBuildInfoResolved((resolution as ResolvedTypeReferenceDirectiveWithFailedLookupLocations).resolvedTypeReferenceDirective),
             failedLookupLocations: toReadonlyArrayOrUndefined(resolution.failedLookupLocations, toAbsoluteFileId),
             affectingLocations: toReadonlyArrayOrUndefined(resolution.affectingLocations, toAbsoluteFileId),
-            resolutionDiagnostics: toReadonlyArrayOrUndefined(resolution.resolutionDiagnostics, toReusableDiagnostic),
+            resolutionDiagnostics: toReadonlyArrayOrUndefined(resolution.resolutionDiagnostics, toProgramBuildInfoResolutionDiagnostic),
         };
     }
 
@@ -1354,6 +1361,14 @@ function getBuildInfo(
             primary: (resolved as ResolvedTypeReferenceDirective).primary || undefined,
             extension: undefined,
         } : undefined;
+    }
+
+    function toProgramBuildInfoResolutionDiagnostic(d: ResolutionDiagnostic): ProgramBuildInfoResolutionDiagnostic {
+        return {
+            isImports: d.isImports || undefined,
+            entry: d.entry || undefined,
+            packagePath: toAbsoluteFileId(d.packagePath),
+        };
     }
 }
 
@@ -2157,7 +2172,7 @@ export function createOldBuildInfoProgram(
                 resolvedTypeReferenceDirective: toResolved(resolution.resolvedTypeReferenceDirective, resolvedFileName, extenstion),
                 failedLookupLocations: resolution.failedLookupLocations?.map(resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFileAbsolutePath) || [],
                 affectingLocations: resolution.affectingLocations?.map(resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFileAbsolutePath),
-                resolutionDiagnostics: resolution.resolutionDiagnostics?.length ? convertToDiagnostics(resolution.resolutionDiagnostics, /*newProgram*/ undefined, /*getCanonicalFileName*/ undefined) as Diagnostic[] : undefined
+                resolutionDiagnostics: resolution.resolutionDiagnostics?.map(toResolutionDiagnostic),
             };
         }
         resolutions[resolutionId - 1] = false;
@@ -2175,6 +2190,14 @@ export function createOldBuildInfoProgram(
             resolvedFileName,
             originalPath: resolved.originalPath ? resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFileAbsolutePath(resolved.originalPath) : undefined,
             extension,
+        };
+    }
+
+    function toResolutionDiagnostic(d: ProgramBuildInfoResolutionDiagnostic): ResolutionDiagnostic {
+        return {
+            isImports: !!d.isImports,
+            entry: d.entry || "",
+            packagePath: resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFileAbsolutePath(d.packagePath)
         };
     }
 }

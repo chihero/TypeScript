@@ -1,7 +1,7 @@
 import {
     append, appendIfUnique, arrayFrom, changeAnyExtension, CharacterCodes, combinePaths, CommandLineOption, comparePaths, Comparison,
-    CompilerOptions, contains, containsPath, createCompilerDiagnostic, Debug, Diagnostic, DiagnosticMessage,
-    DiagnosticReporter, Diagnostics, directoryProbablyExists, directorySeparator, emptyArray, endsWith,
+    CompilerOptions, contains, containsPath, Debug, DiagnosticMessage,
+    Diagnostics, directoryProbablyExists, directorySeparator, emptyArray, endsWith,
     ensureTrailingDirectorySeparator, every, Extension, extensionIsTS, fileExtensionIs, fileExtensionIsOneOf,
     FileReference, filter, firstDefined, forEach, forEachAncestorDirectory, formatMessage, getBaseFileName,
     GetCanonicalFileName, getCommonSourceDirectory, getCompilerOptionValue, getDirectoryPath, GetEffectiveTypeRootsHost, getEmitModuleKind,
@@ -13,6 +13,7 @@ import {
     ModuleKind, ModuleResolutionHost, ModuleResolutionKind, moduleResolutionOptionDeclarations, noop, noopPush, normalizePath, normalizeSlashes,
     PackageId, packageIdToString, Path, pathIsRelative, Pattern,
     patternText, perfLogger, Push, readJson, removeExtension, removeFileExtension, removePrefix,
+    ResolutionDiagnostic,
     ResolutionMode,
     ResolvedModuleWithFailedLookupLocations, ResolvedProjectReference, ResolvedTypeReferenceDirective,
     ResolvedTypeReferenceDirectiveWithFailedLookupLocations, some, sort, SourceFile, startsWith, stringContains,
@@ -112,7 +113,7 @@ function createResolvedModuleWithFailedLookupLocations(
     isExternalLibraryImport: boolean | undefined,
     failedLookupLocations: string[],
     affectingLocations: string[],
-    diagnostics: Diagnostic[],
+    diagnostics: ResolutionDiagnostic[],
     resultFromCache: ResolvedModuleWithFailedLookupLocations | undefined
 ): ResolvedModuleWithFailedLookupLocations {
     if (resultFromCache) {
@@ -153,7 +154,7 @@ export interface ModuleResolutionState {
     features: NodeResolutionFeatures;
     conditions: readonly string[];
     requestContainingDirectory: string | undefined;
-    reportDiagnostic: DiagnosticReporter;
+    reportResolutionDiagnostic: (d: ResolutionDiagnostic) => void;
 }
 
 /** Just the fields that we use for module resolution.
@@ -404,7 +405,7 @@ export function resolveTypeReferenceDirective(typeReferenceDirectiveName: string
         features |= NodeResolutionFeatures.EsmMode;
     }
     const conditions = features & NodeResolutionFeatures.Exports ? features & NodeResolutionFeatures.EsmMode ? ["node", "import", "types"] : ["node", "require", "types"] : [];
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics: ResolutionDiagnostic[] = [];
     const moduleResolutionState: ModuleResolutionState = {
         compilerOptions: options,
         host,
@@ -415,7 +416,7 @@ export function resolveTypeReferenceDirective(typeReferenceDirectiveName: string
         features,
         conditions,
         requestContainingDirectory: containingDirectory,
-        reportDiagnostic: diag => void diagnostics.push(diag),
+        reportResolutionDiagnostic: diag => void diagnostics.push(diag),
     };
     let resolved = primaryLookup();
     let primary = true;
@@ -1490,7 +1491,7 @@ function nodeModuleNameResolverWorker(features: NodeResolutionFeatures, moduleNa
         conditions.pop();
     }
 
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics: ResolutionDiagnostic[] = [];
     const state: ModuleResolutionState = {
         compilerOptions,
         host,
@@ -1501,7 +1502,7 @@ function nodeModuleNameResolverWorker(features: NodeResolutionFeatures, moduleNa
         features,
         conditions,
         requestContainingDirectory: containingDirectory,
-        reportDiagnostic: diag => void diagnostics.push(diag),
+        reportResolutionDiagnostic: diag => void diagnostics.push(diag),
     };
 
     if (traceEnabled && getEmitModuleResolutionKind(compilerOptions) >= ModuleResolutionKind.Node16 && getEmitModuleResolutionKind(compilerOptions) <= ModuleResolutionKind.NodeNext) {
@@ -1938,7 +1939,7 @@ export function getTemporaryModuleResolutionState(packageJsonInfoCache: PackageJ
         features: NodeResolutionFeatures.None,
         conditions: emptyArray,
         requestContainingDirectory: undefined,
-        reportDiagnostic: noop
+        reportResolutionDiagnostic: noop
     };
 }
 
@@ -2454,15 +2455,7 @@ function getLoadModuleFromTargetImportOrExport(extensions: Extensions, state: Mo
                         fragment = ensureTrailingDirectorySeparator(commonDir);
                     }
                 }
-                if (commonSourceDirGuesses.length > 1) {
-                    state.reportDiagnostic(createCompilerDiagnostic(
-                        isImports
-                            ? Diagnostics.The_project_root_is_ambiguous_but_is_required_to_resolve_import_map_entry_0_in_file_1_Supply_the_rootDir_compiler_option_to_disambiguate
-                            : Diagnostics.The_project_root_is_ambiguous_but_is_required_to_resolve_export_map_entry_0_in_file_1_Supply_the_rootDir_compiler_option_to_disambiguate,
-                        entry === "" ? "." : entry, // replace empty string with `.` - the reverse of the operation done when entries are built - so main entrypoint errors don't look weird
-                        packagePath
-                    ));
-                }
+                if (commonSourceDirGuesses.length > 1) state.reportResolutionDiagnostic({ isImports, entry, packagePath });
                 for (const commonSourceDirGuess of commonSourceDirGuesses) {
                     const candidateDirectories = getOutputDirectoriesForBaseDirectory(commonSourceDirGuess);
                     for (const candidateDir of candidateDirectories) {
@@ -2727,7 +2720,7 @@ export function classicNameResolver(moduleName: string, containingFile: string, 
     const failedLookupLocations: string[] = [];
     const affectingLocations: string[] = [];
     const containingDirectory = getDirectoryPath(containingFile);
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics: ResolutionDiagnostic[] = [];
     const state: ModuleResolutionState = {
         compilerOptions,
         host,
@@ -2737,7 +2730,7 @@ export function classicNameResolver(moduleName: string, containingFile: string, 
         features: NodeResolutionFeatures.None,
         conditions: [],
         requestContainingDirectory: containingDirectory,
-        reportDiagnostic: diag => void diagnostics.push(diag),
+        reportResolutionDiagnostic: diag => void diagnostics.push(diag),
     };
 
     const resolved = tryResolve(Extensions.TypeScript) || tryResolve(Extensions.JavaScript);
@@ -2796,7 +2789,7 @@ export function loadModuleFromGlobalCache(moduleName: string, projectName: strin
     }
     const failedLookupLocations: string[] = [];
     const affectingLocations: string[] = [];
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics: ResolutionDiagnostic[] = [];
     const state: ModuleResolutionState = {
         compilerOptions,
         host,
@@ -2807,7 +2800,7 @@ export function loadModuleFromGlobalCache(moduleName: string, projectName: strin
         features: NodeResolutionFeatures.None,
         conditions: [],
         requestContainingDirectory: undefined,
-        reportDiagnostic: diag => void diagnostics.push(diag),
+        reportResolutionDiagnostic: diag => void diagnostics.push(diag),
     };
     const resolved = loadModuleFromImmediateNodeModulesDirectory(Extensions.DtsOnly, moduleName, globalCache, state, /*typesScopeOnly*/ false, /*cache*/ undefined, /*redirectedReference*/ undefined);
     return createResolvedModuleWithFailedLookupLocations(

@@ -474,12 +474,18 @@ interface ReadableProgramBuildInfoResolutionBase {
 }
 type ReadableProgramBuildInfoResolvedModuleFull = Omit<ts.ProgramBuildInfoResolvedModuleFull, "resolvedFileName" | "originalPath"> & ReadableProgramBuildInfoResolutionBase;
 type ReadableProgramBuildInfoResolvedTypeReferenceDirective = Omit<ts.ProgramBuildInfoResolvedTypeReferenceDirective, "resolvedFileName" | "originalPath"> & ReadableProgramBuildInfoResolutionBase;
-type ReadableProgramBuildInfoResolution = Omit<ts.ProgramBuildInfoResolution, "resolvedModule" | "resolvedTypeReferenceDirective" | "failedLookupLocations" | "affectingLocations"> & {
+type ReadableProgramBuildInfoResolutionDiagnostic = Omit<ts.ProgramBuildInfoResolutionDiagnostic, "packagePath"> & {
+    packagePath: string;
+};
+type ReadableProgramBuildInfoResolution = Omit<ts.ProgramBuildInfoResolution,
+    "resolvedModule" | "resolvedTypeReferenceDirective" | "failedLookupLocations" | "affectingLocations" | "resolutionDiagnostics"
+> & {
     readonly resolutionId: ts.ProgramBuildInfoResolutionId;
     readonly resolvedModule: ReadableProgramBuildInfoResolvedModuleFull | undefined;
     readonly resolvedTypeReferenceDirective: ReadableProgramBuildInfoResolvedTypeReferenceDirective | undefined;
     readonly failedLookupLocations: readonly string[] | undefined;
     readonly affectingLocations: readonly string[] | undefined;
+    readonly resolutionDiagnostics: readonly ReadableProgramBuildInfoResolutionDiagnostic[] | undefined;
 };
 type ReadableWithOriginal<T, O> = T & {
     readonly original: O;
@@ -706,6 +712,7 @@ function generateBuildInfoProgramBaseline(sys: ts.System, buildInfoPath: string,
             resolvedTypeReferenceDirective: toReadableProgramBuildInfoResolved(resolution.resolvedTypeReferenceDirective),
             failedLookupLocations: resolution.failedLookupLocations?.map(toFileName),
             affectingLocations: resolution.affectingLocations?.map(toFileName),
+            resolutionDiagnostics: resolution.resolutionDiagnostics?.map(toReadableProgramBuildInfoResolutionDiagnostic),
         };
     }
 
@@ -716,6 +723,13 @@ function generateBuildInfoProgramBaseline(sys: ts.System, buildInfoPath: string,
             ...resolved,
             resolvedFileName: toFileName(resolved.resolvedFileName),
             originalPath: resolved.originalPath && toFileName(resolved.originalPath)
+        };
+    }
+
+    function toReadableProgramBuildInfoResolutionDiagnostic(d: ts.ProgramBuildInfoResolutionDiagnostic): ReadableProgramBuildInfoResolutionDiagnostic {
+        return {
+            ...d,
+            packagePath: toFileName(d.packagePath)
         };
     }
 

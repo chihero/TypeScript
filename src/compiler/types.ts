@@ -4373,7 +4373,8 @@ export type FileIncludeReason =
 /** @internal */
 export const enum FilePreprocessingDiagnosticsKind {
     FilePreprocessingReferencedDiagnostic,
-    FilePreprocessingFileExplainingDiagnostic
+    FilePreprocessingFileExplainingDiagnostic,
+    ResolutionDiagnostics,
 }
 
 /** @internal */
@@ -4394,7 +4395,13 @@ export interface FilePreprocessingFileExplainingDiagnostic {
 }
 
 /** @internal */
-export type FilePreprocessingDiagnostics = FilePreprocessingReferencedDiagnostic | FilePreprocessingFileExplainingDiagnostic;
+export interface ResolutionDiagnostics {
+    kind: FilePreprocessingDiagnosticsKind.ResolutionDiagnostics;
+    diagnostics: readonly Diagnostic[];
+}
+
+/** @internal */
+export type FilePreprocessingDiagnostics = FilePreprocessingReferencedDiagnostic | FilePreprocessingFileExplainingDiagnostic | ResolutionDiagnostics;
 
 /** @internal */
 export const enum EmitOnly{
@@ -7268,6 +7275,13 @@ export const enum Extension {
     Dcts = ".d.cts",
 }
 
+/** @internal */
+export interface ResolutionDiagnostic {
+    isImports: boolean;
+    entry: string;
+    packagePath: string;
+}
+
 export interface ResolvedModuleWithFailedLookupLocations {
     readonly resolvedModule: ResolvedModuleFull | undefined;
     /** @internal */
@@ -7275,7 +7289,7 @@ export interface ResolvedModuleWithFailedLookupLocations {
     /** @internal */
     affectingLocations?: string[];
     /** @internal */
-    resolutionDiagnostics?: Diagnostic[]
+    resolutionDiagnostics?: ResolutionDiagnostic[]
 }
 
 export interface ResolvedTypeReferenceDirective {
@@ -7298,7 +7312,7 @@ export interface ResolvedTypeReferenceDirectiveWithFailedLookupLocations {
     readonly resolvedTypeReferenceDirective: ResolvedTypeReferenceDirective | undefined;
     readonly failedLookupLocations: string[];
     /** @internal */ affectingLocations?: string[];
-    /** @internal */ resolutionDiagnostics?: Diagnostic[];
+    /** @internal */ resolutionDiagnostics?: ResolutionDiagnostic[];
 }
 
 /** @internal */
