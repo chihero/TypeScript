@@ -8,9 +8,9 @@ import {
     DiagnosticCategory, DiagnosticMessageChain, DiagnosticRelatedInformation, DiagnosticWithLocation,
     EmitAndSemanticDiagnosticsBuilderProgram, EmitOnly, EmitResult, emitSkippedWithNoDiagnostics, emptyArray,
     ensurePathIsNonModuleName, Extension, extensionFromPath, filterSemanticDiagnostics, forEach, forEachEntry, forEachKey, generateDjb2Hash,
-    GetCanonicalFileName, getDirectoryPath, getEmitDeclarations, getNormalizedAbsolutePath, getOptionsNameMap,
-    getOwnKeys, getRelativePathFromDirectory, getTsBuildInfoEmitOutputFilePath, handleNoEmitOptions, isArray,
-    isDeclarationFileName, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, memoize, ModeAwareCache, MoreAwareCacheEntry, noop, notImplemented,
+    GetCanonicalFileName, getDirectoryPath, getEmitDeclarations, getModeAwareCacheKey, getNormalizedAbsolutePath, getOptionsNameMap,
+    getOwnKeys, getRelativePathFromDirectory, getResolvedFileNameForModuleNameToDirectorySet, getTsBuildInfoEmitOutputFilePath, handleNoEmitOptions, isArray,
+    isDeclarationFileName, isExternalModuleNameRelative, isJsonSourceFile, isNumber, isString, map, mapDefined, maybeBind, memoize, ModeAwareCache, ModeAwareCacheKey, moduleNameToDirectorySet, MoreAwareCacheEntry, noop, notImplemented,
     OldBuildInfoProgram,
     outFile, Path, Program, ProjectReference, ReadBuildProgramHost, ReadonlyCollection,
     ResolutionDiagnostic,
@@ -103,6 +103,7 @@ export interface ReusableBuilderProgramState extends BuilderState {
     cacheResolutions?: {
         modules: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
         typeRefs: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
+        moduleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>>;
     };
     resuableCacheResolutions?: {
         cache: ProgramBuildInfoCacheResolutions;
@@ -1304,10 +1305,15 @@ function getBuildInfo(
     function toProgramBuildInfoResolutionCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
         cache: Map<Path, ModeAwareCache<T>>
     ): ProgramBuildInfoResolutionCache | undefined {
-        return cache && arrayFrom(cache.entries(), ([dirPath, dirCache]) => [
-            toFileId(dirPath),
-            arrayFrom(dirCache.entries()).map(toProgramBuildInfoResolutionEntryId)
-        ]);
+        let result: [dirId: ProgramBuildInfoFileId, resolutions: readonly ProgramBuildInfoResolutionEntryId[]][] | undefined;
+        cache?.forEach((dirCache, dirPath) => dirCache.size() ?
+            (result ??= []).push([
+                toFileId(dirPath),
+                arrayFrom(dirCache.entries()).map(toProgramBuildInfoResolutionEntryId)
+            ]) :
+            undefined
+        );
+        return result;
     }
 
     function toProgramBuildInfoResolutionEntryId([name, mode, resolution]: MoreAwareCacheEntry<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>): ProgramBuildInfoResolutionEntryId {
@@ -1376,25 +1382,43 @@ function getCacheResolutions(state: BuilderProgramState, getCanonicalFileName: G
     if (state.cacheResolutions || !state.compilerOptions.cacheResolutions) return state.cacheResolutions;
     let modules: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
     let typeRefs: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
+    const moduleNameToDirectoryMap = createCacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>>(state.compilerOptions);
     state.program!.getSourceFiles().forEach(f => {
-        modules = toPerDirectoryCache(state, modules, f, f.resolvedModules);
-        typeRefs = toPerDirectoryCache(state, typeRefs, f, f.resolvedTypeReferenceDirectiveNames);
+        modules = toPerDirectoryCache(state, getCanonicalFileName, modules, f, f.resolvedModules, moduleNameToDirectoryMap);
+        typeRefs = toPerDirectoryCache(state, getCanonicalFileName, typeRefs, f, f.resolvedTypeReferenceDirectiveNames);
     });
     const automaticTypeDirectiveNames = state.program!.getAutomaticTypeDirectiveNames();
     if (automaticTypeDirectiveNames.length) {
         const currentDirectory = state.program!.getCurrentDirectory();
         const containingDirectory = state.compilerOptions.configFilePath ? getDirectoryPath(state.compilerOptions.configFilePath) : currentDirectory;
         const containingPath = toPath(containingDirectory, currentDirectory, getCanonicalFileName);
-        typeRefs = toPerDirectoryCache(state, typeRefs, containingPath, state.program!.getAutomaticTypeDirectiveResolutions());
+        typeRefs = toPerDirectoryCache(state, getCanonicalFileName, typeRefs, containingPath, state.program!.getAutomaticTypeDirectiveResolutions());
     }
-    return state.cacheResolutions = { modules, typeRefs };
+    return state.cacheResolutions = { modules, typeRefs, moduleNameToDirectoryMap };
 }
 
+function toPerDirectoryCache(
+    state: BuilderProgramState,
+    getCanonicalFileName: GetCanonicalFileName,
+    cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined,
+    fOrDirPath: SourceFile | Path,
+    cache: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations> | undefined,
+): CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
+function toPerDirectoryCache(
+    state: BuilderProgramState,
+    getCanonicalFileName: GetCanonicalFileName,
+    cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined,
+    fOrDirPath: SourceFile | Path,
+    cache: ModeAwareCache<ResolvedModuleWithFailedLookupLocations> | undefined,
+    moduleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>>,
+): CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
 function toPerDirectoryCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
     state: BuilderProgramState,
+    getCanonicalFileName: GetCanonicalFileName,
     cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<T>> | undefined,
     fOrDirPath: SourceFile | Path,
     cache: ModeAwareCache<T> | undefined,
+    moduleNameToDirectoryMap?: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>> | undefined,
 ): CacheWithRedirects<Path, ModeAwareCache<T>> | undefined {
     if (!cache?.size()) return cacheWithRedirects;
     let dirPath: Path, redirectedReference: ResolvedProjectReference | undefined;
@@ -1405,12 +1429,36 @@ function toPerDirectoryCache<T extends ResolvedModuleWithFailedLookupLocations |
     else {
         dirPath = fOrDirPath;
     }
-    let dirCache = cacheWithRedirects?.getMapOfCacheRedirects(redirectedReference)?.get(dirPath);
+    let perDirResolutionCache = cacheWithRedirects?.getMapOfCacheRedirects(redirectedReference);
+    let dirCache = perDirResolutionCache?.get(dirPath);
     cache.forEach((resolution, name, mode) => {
         if (!(resolution as ResolvedModuleWithFailedLookupLocations).resolvedModule?.resolvedFileName && !(resolution as ResolvedTypeReferenceDirectiveWithFailedLookupLocations).resolvedTypeReferenceDirective?.resolvedFileName) return;
         if (dirCache?.has(name, mode)) return;
-        if (!dirCache) (cacheWithRedirects ??= createCacheWithRedirects(state.compilerOptions)).getOrCreateMapOfCacheRedirects(redirectedReference).set(dirPath, dirCache = createModeAwareCache());
+        // If there was already external module resolution that is same, set for child directory, dont set resolution for this directory
+        if (moduleNameToDirectoryMap &&
+            !isExternalModuleNameRelative(name) &&
+            moduleNameToDirectoryMap.getMapOfCacheRedirects(redirectedReference)?.get(getModeAwareCacheKey(name, mode))?.get(dirPath)) {
+            return;
+        }
+        if (!dirCache) {
+            perDirResolutionCache ??= (cacheWithRedirects ??= createCacheWithRedirects(state.compilerOptions)).getOrCreateMapOfCacheRedirects(redirectedReference);
+            perDirResolutionCache.set(dirPath, dirCache = createModeAwareCache());
+        }
         dirCache.set(name, mode, resolution);
+        if (!moduleNameToDirectoryMap || isExternalModuleNameRelative(name)) return;
+        // put result in per-module name cache and delete everything that is not needed
+        const actualModuleNameToDirectoryMap = moduleNameToDirectoryMap.getOrCreateMapOfCacheRedirects(redirectedReference);
+        const key = getModeAwareCacheKey(name, mode);
+        let directoryPathMap = actualModuleNameToDirectoryMap.get(key);
+        if (!directoryPathMap) actualModuleNameToDirectoryMap.set(key, directoryPathMap = new Map());
+        moduleNameToDirectorySet(
+            directoryPathMap,
+            dirPath,
+            resolution as ResolvedModuleWithFailedLookupLocations,
+            getResolvedFileNameForModuleNameToDirectorySet,
+            dir => toPath(dir, state.program!.getCurrentDirectory(), getCanonicalFileName),
+            ancestorPath => perDirResolutionCache?.get(ancestorPath)?.delete(name, mode)
+        );
     });
     return cacheWithRedirects;
 }
@@ -1878,13 +1926,15 @@ export interface ProgramBuildInfoPathDecoder {
     toAbsolutePath(path: string): string;
     toFilePath(fileId: ProgramBuildInfoFileId): Path;
     toFileAbsolutePath(fileId: ProgramBuildInfoAbsoluteFileId): string;
+    currentDirectory: string;
+    getCanonicalFileName: GetCanonicalFileName;
 }
 
 function getProgramBuildInfoFilePathDecoder(fileNames: readonly string[], buildInfoPath: string, currentDirectory: string, getCanonicalFileName: GetCanonicalFileName): ProgramBuildInfoPathDecoder {
     const buildInfoDirectory = getDirectoryPath(getNormalizedAbsolutePath(buildInfoPath, currentDirectory));
     let filePaths: Path[] | undefined;
     let fileAbsolutePaths: string[] | undefined;
-    return { toAbsolutePath, toFilePath, toFileAbsolutePath };
+    return { toAbsolutePath, toFilePath, toFileAbsolutePath, currentDirectory, getCanonicalFileName };
 
     function toPath(path: string) {
         return ts.toPath(path, buildInfoDirectory, getCanonicalFileName);
@@ -2043,12 +2093,13 @@ export function createOldBuildInfoProgram(
 
     type Resolution = ResolvedModuleWithFailedLookupLocations & ResolvedTypeReferenceDirectiveWithFailedLookupLocations;
     type ResolutionEntry = [name: string, resolutionId: ProgramBuildInfoResolutionId, mode: ResolutionMode];
-    type BuildInfoResolutionEntriesOrModeAwareCache = readonly ProgramBuildInfoResolutionEntryId[] | ModeAwareCache<ProgramBuildInfoResolutionId>;
-    type DecodedResolvedMap = CacheWithRedirects<Path, BuildInfoResolutionEntriesOrModeAwareCache>;
+    type DecodedResolvedMap = CacheWithRedirects<Path, ModeAwareCache<ProgramBuildInfoResolutionId>>;
     const decodedResolvedModules: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
     const decodedResolvedTypeRefs: DecodedResolvedMap = createCacheWithRedirects(state.compilerOptions);
+    const decodedModuleNameToDirectoryMap = createCacheWithRedirects<ModeAwareCacheKey, Map<Path, ProgramBuildInfoResolutionId>>(state.compilerOptions);
 
     let resolutions: (Resolution | false)[] | undefined;
+    let originalPathOrResolvedFileNames: string[] | undefined;
     let resolutionEntries: ResolutionEntry[] | undefined;
     return {
         getCompilerOptions: () => state.compilerOptions,
@@ -2060,6 +2111,8 @@ export function createOldBuildInfoProgram(
             name,
             mode,
             redirectedReference,
+            cacheResolutions?.moduleNameToDirectoryMap,
+            decodedModuleNameToDirectoryMap,
         ),
         getResolvedTypeReferenceDirective: (dirPath, name, mode, redirectedReference) => getResolvedFromCache(
             cacheResolutions?.typeRefs,
@@ -2069,6 +2122,8 @@ export function createOldBuildInfoProgram(
             name,
             mode,
             redirectedReference,
+            /*moduleNameToDirectoryMap*/ undefined,
+            /*decodedModuleNameToDirectoryMap*/ undefined,
         ),
     };
     function fileExists(fileName: string) {
@@ -2077,17 +2132,20 @@ export function createOldBuildInfoProgram(
         return result;
     }
 
-    function getResolvedFromCache(
-        cache: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined,
+    function getResolvedFromCache<T extends ResolvedModuleWithFailedLookupLocations | ResolvedTypeReferenceDirectiveWithFailedLookupLocations>(
+        cache: CacheWithRedirects<Path, ModeAwareCache<T>> | undefined,
         reusableCache: ProgramBuildInfoResolutionCacheWithRedirects | undefined,
         decodedReusableCache: DecodedResolvedMap,
         dirPath: Path,
         name: string,
         mode: ResolutionMode,
         redirectedReference: ResolvedProjectReference | undefined,
+        moduleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, T>> | undefined,
+        decodedModuleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ProgramBuildInfoResolutionId>> | undefined,
     ): Resolution | undefined {
         // If we are using the cache, directly get from there
-        const fromCache = cache?.getMapOfCacheRedirects(redirectedReference)?.get(dirPath)?.get(name, mode);
+        const fromCache = cache?.getMapOfCacheRedirects(redirectedReference)?.get(dirPath)?.get(name, mode) ||
+            moduleNameToDirectoryMap?.getMapOfCacheRedirects(redirectedReference)?.get(getModeAwareCacheKey(name, mode))?.get(dirPath);
         if (fromCache) {
             return fileExists(
                 (fromCache as ResolvedModuleWithFailedLookupLocations).resolvedModule?.resolvedFileName ||
@@ -2098,24 +2156,20 @@ export function createOldBuildInfoProgram(
         // Decode so we have maps for directories
         if (!decodedReusableCache.getOwnMap().size && !decodedReusableCache.redirectsKeyToCache.size) {
             if (isArray(reusableCache)) {
-                setBuildInfoResolutionEntries(decodedReusableCache, state.compilerOptions, reusableCache);
+                setBuildInfoResolutionEntries(decodedReusableCache, state.compilerOptions, reusableCache, decodedModuleNameToDirectoryMap);
             }
             else {
-                if (reusableCache.own) setBuildInfoResolutionEntries(decodedReusableCache, state.compilerOptions, reusableCache.own);
+                if (reusableCache.own) setBuildInfoResolutionEntries(decodedReusableCache, state.compilerOptions, reusableCache.own, decodedModuleNameToDirectoryMap);
                 reusableCache.redirects.forEach(({ options, cache }) => setBuildInfoResolutionEntries(
                     decodedReusableCache,
                     options ? convertToOptionsWithAbsolutePaths(options, resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toAbsolutePath) : {},
-                    cache
+                    cache,
+                    decodedModuleNameToDirectoryMap,
                 ));
             }
         }
-        const actualCache = decodedReusableCache.getMapOfCacheRedirects(redirectedReference);
-        let cacheForDir = actualCache?.get(dirPath);
-        if (!cacheForDir) return undefined;
-
-        // If this was not decoded to mode aware cache, decode now
-        if (isArray(cacheForDir)) actualCache!.set(dirPath, cacheForDir = toModeAwareCache(cacheForDir));
-        const resolutionId = cacheForDir.get(name, mode);
+        const resolutionId = decodedReusableCache.getMapOfCacheRedirects(redirectedReference)?.get(dirPath)?.get(name, mode) ||
+            decodedModuleNameToDirectoryMap?.getMapOfCacheRedirects(redirectedReference)?.get(getModeAwareCacheKey(name, mode))?.get(dirPath);
         return resolutionId ? toResolution(resolutionId) : undefined;
     }
 
@@ -2123,19 +2177,42 @@ export function createOldBuildInfoProgram(
         decodedReusableCache: DecodedResolvedMap,
         options: CompilerOptions,
         reusableCache: ProgramBuildInfoResolutionCache,
+        decodedModuleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ProgramBuildInfoResolutionId>> | undefined,
     ) {
-        const map = decodedReusableCache.createMapForCompilerOptions(options || {});
-        reusableCache.forEach(([dirId, entryId]) => map.set(
-            resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFilePath(dirId),
-            entryId
-        ));
+        const map = decodedReusableCache.createMapForCompilerOptions(options);
+        reusableCache.forEach(([dirId, entryId]) => {
+            const dirPath = resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFilePath(dirId);
+            map.set(dirPath, toModeAwareCache(entryId, dirPath, options, decodedModuleNameToDirectoryMap));
+        });
     }
 
-    function toModeAwareCache(entries: readonly ProgramBuildInfoResolutionEntryId[]) {
+    function toModeAwareCache(
+        entries: readonly ProgramBuildInfoResolutionEntryId[],
+        dirPath: Path,
+        options: CompilerOptions,
+        decodedModuleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ProgramBuildInfoResolutionId>> | undefined,
+    ) {
         const modeAwareCache = createModeAwareCache<ProgramBuildInfoResolutionId>();
         entries.forEach(entryId => {
             const [name, resolutionId, mode] = toResolutionEntry(entryId);
             modeAwareCache.set(name, mode, resolutionId);
+            if (!decodedModuleNameToDirectoryMap || isExternalModuleNameRelative(name)) return;
+            const mapForOptions = decodedModuleNameToDirectoryMap.createMapForCompilerOptions(options);
+            const key = getModeAwareCacheKey(name, mode);
+            let moduleNameMap = mapForOptions.get(key);
+            if (!moduleNameMap) mapForOptions.set(key, moduleNameMap = new Map());
+            moduleNameToDirectorySet(
+                moduleNameMap,
+                dirPath,
+                resolutionId,
+                toOriginalPathOrResolvedFileName,
+                fileName => toPath(
+                    fileName,
+                    resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().currentDirectory,
+                    resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().getCanonicalFileName,
+                ),
+                noop
+            );
         });
         return modeAwareCache;
     }
@@ -2154,6 +2231,14 @@ export function createOldBuildInfoProgram(
 
     function toName(nameId: ProgramBuildInfoResolutionNameId): string {
         return resuableCacheResolutions!.cache.names[nameId - 1];
+    }
+
+    function toOriginalPathOrResolvedFileName(resolutionId: ProgramBuildInfoResolutionId): string {
+        return originalPathOrResolvedFileNames?.[resolutionId - 1] ??
+            ((originalPathOrResolvedFileNames ??= new Array(resuableCacheResolutions!.cache.resolutions.length))[resolutionId - 1] = resuableCacheResolutions!.getProgramBuildInfoFilePathDecoder().toFileAbsolutePath(
+                resuableCacheResolutions!.cache.resolutions[resolutionId - 1].resolvedModule!.originalPath ||
+                resuableCacheResolutions!.cache.resolutions[resolutionId - 1].resolvedModule!.resolvedFileName
+            ));
     }
 
     function toResolution(resolutionId: ProgramBuildInfoResolutionId): Resolution | undefined {
