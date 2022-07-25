@@ -1,3 +1,4 @@
+import * as ts from "../../_namespaces/ts";
 import { TestServerHost } from "../virtualFileSystemWithWatch";
 import { getPkgImportContent, getPkgTypeRefContent, getWatchSystemWithMultipleProjects, getWatchSystemWithMultipleProjectsWithBuild, getWatchSystemWithNode16, getWatchSystemWithNode16WithBuild, getWatchSystemWithOut, getWatchSystemWithOutWithBuild, getWatchSystemWithSameResolutionFromMultiplePlaces, getWatchSystemWithSameResolutionFromMultiplePlacesWithBuild } from "../tsbuild/cacheResolutionsHelper";
 import { verifyTscWatch } from "../tscWatch/helpers";
@@ -138,9 +139,20 @@ describe("unittests:: tsbuildWatch:: watchMode:: cacheResolutions::", () => {
     });
 
     describe("resolution reuse from multiple places", () => {
-        verifyTscWatchMultiFile("multiple places", getWatchSystemWithSameResolutionFromMultiplePlaces);
-        verifyTscWatchMultiFile("multiple places already built", getWatchSystemWithSameResolutionFromMultiplePlacesWithBuild);
-        function verifyTscWatchMultiFile(subScenario: string, sys: () => TestServerHost) {
+        verifyTscWatchMultiPlaces("multiple places", getWatchSystemWithSameResolutionFromMultiplePlaces);
+        verifyTscWatchMultiPlaces("multiple places already built", getWatchSystemWithSameResolutionFromMultiplePlacesWithBuild);
+        verifyTscWatch({
+            scenario: "cacheResolutions",
+            subScenario: "multiple places first pass",
+            sys: () => {
+                const sys = getWatchSystemWithSameResolutionFromMultiplePlacesWithBuild();
+                sys.prependFile("/src/project/d/da/daa/daaa/x/y/z/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`);
+                return sys;
+            },
+            commandLineArgs: ["-b", "-w", "--explainFiles"],
+            changes: ts.emptyArray
+        });
+        function verifyTscWatchMultiPlaces(subScenario: string, sys: () => TestServerHost) {
             verifyTscWatch({
                 scenario: "cacheResolutions",
                 subScenario,
@@ -160,6 +172,16 @@ describe("unittests:: tsbuildWatch:: watchMode:: cacheResolutions::", () => {
                     {
                         caption: "modify c/ca/caa/randomFileForImport by adding import",
                         change: sys => sys.prependFile("/src/project/c/ca/caa/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+                        timeouts: sys => sys.runQueuedTimeoutCallbacks(),
+                    },
+                    {
+                        caption: "modify d/da/daa/daaa/x/y/z/randomFileForImport by adding import",
+                        change: sys => sys.prependFile("/src/project/d/da/daa/daaa/x/y/z/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+                        timeouts: sys => sys.runQueuedTimeoutCallbacks(),
+                    },
+                    {
+                        caption: "modify e/ea/eaa/eaaa/x/y/z/randomFileForImport by adding import",
+                        change: sys => sys.prependFile("/src/project/e/ea/eaa/eaaa/x/y/z/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
                         timeouts: sys => sys.runQueuedTimeoutCallbacks(),
                     },
                 ]

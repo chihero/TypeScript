@@ -253,12 +253,14 @@ function getFsMapWithSameResolutionFromMultiplePlaces(): { [path: string]: strin
                 "c/ca/caa/randomFileForImport.ts",
                 "c/ca/caa/caaa/fileWithImports.ts",
                 "c/cb/fileWithImports.ts",
+                "d/da/daa/daaa/x/y/z/randomFileForImport.ts",
                 "d/da/daa/daaa/fileWithImports.ts",
                 "d/da/daa/fileWithImports.ts",
                 "d/da/fileWithImports.ts",
                 "e/ea/fileWithImports.ts",
                 "e/ea/eaa/fileWithImports.ts",
                 "e/ea/eaa/eaaa/fileWithImports.ts",
+                "e/ea/eaa/eaaa/x/y/z/randomFileForImport.ts",
             ],
         }),
         "/src/project/fileWithImports.ts": Utils.dedent`
@@ -282,6 +284,7 @@ function getFsMapWithSameResolutionFromMultiplePlaces(): { [path: string]: strin
         "/src/project/c/cb/fileWithImports.ts": Utils.dedent`
             import type { ImportInterface0 } from "pkg0";
         `,
+        "/src/project/d/da/daa/daaa/x/y/z/randomFileForImport.ts": getRandomFileContent(),
         "/src/project/d/da/daa/daaa/fileWithImports.ts": Utils.dedent`
             import type { ImportInterface0 } from "pkg0";
         `,
@@ -300,6 +303,7 @@ function getFsMapWithSameResolutionFromMultiplePlaces(): { [path: string]: strin
         "/src/project/e/ea/eaa/eaaa/fileWithImports.ts": Utils.dedent`
             import type { ImportInterface0 } from "pkg0";
         `,
+        "/src/project/e/ea/eaa/eaaa/x/y/z/randomFileForImport.ts": getRandomFileContent(),
         "/src/project/node_modules/pkg0/index.d.ts": getPkgImportContent("Import", 0),
     };
 }
