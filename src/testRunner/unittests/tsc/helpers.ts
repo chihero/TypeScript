@@ -478,12 +478,11 @@ type ReadableProgramBuildInfoResolutionDiagnostic = Omit<ts.ProgramBuildInfoReso
     packagePath: string;
 };
 type ReadableProgramBuildInfoResolution = Omit<ts.ProgramBuildInfoResolution,
-    "resolvedModule" | "resolvedTypeReferenceDirective" | "failedLookupLocations" | "affectingLocations" | "resolutionDiagnostics"
+    "resolvedModule" | "resolvedTypeReferenceDirective" | "affectingLocations" | "resolutionDiagnostics"
 > & {
     readonly resolutionId: ts.ProgramBuildInfoResolutionId;
     readonly resolvedModule: ReadableProgramBuildInfoResolvedModuleFull | undefined;
     readonly resolvedTypeReferenceDirective: ReadableProgramBuildInfoResolvedTypeReferenceDirective | undefined;
-    readonly failedLookupLocations: readonly string[] | undefined;
     readonly affectingLocations: readonly string[] | undefined;
     readonly resolutionDiagnostics: readonly ReadableProgramBuildInfoResolutionDiagnostic[] | undefined;
 };
@@ -710,7 +709,6 @@ function generateBuildInfoProgramBaseline(sys: ts.System, buildInfoPath: string,
             ...resolution,
             resolvedModule: toReadableProgramBuildInfoResolved(resolution.resolvedModule),
             resolvedTypeReferenceDirective: toReadableProgramBuildInfoResolved(resolution.resolvedTypeReferenceDirective),
-            failedLookupLocations: resolution.failedLookupLocations?.map(toFileName),
             affectingLocations: resolution.affectingLocations?.map(toFileName),
             resolutionDiagnostics: resolution.resolutionDiagnostics?.map(toReadableProgramBuildInfoResolutionDiagnostic),
         };
