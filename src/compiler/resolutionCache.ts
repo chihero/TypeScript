@@ -1,7 +1,7 @@
 import * as ts from "./_namespaces/ts";
 import {
     arrayToMap, CachedDirectoryStructureHost, CacheWithRedirects, CharacterCodes, clearMap, closeFileWatcher,
-    closeFileWatcherOf, CompilerOptions, contains, createCacheWithRedirects, createModeAwareCache,
+    closeFileWatcherOf, CompilerOptions, contains, createModeAwareCache,
     createModuleResolutionCache, createMultiMap, createTypeReferenceDirectiveResolutionCache, Debug, Diagnostics,
     directorySeparator, DirectoryWatcherCallback, emptyArray, emptyIterator, endsWith, Extension, extensionIsTS,
     fileExtensionIs, fileExtensionIsOneOf, FileReference, FileWatcher, FileWatcherCallback, firstDefinedIterator,
@@ -10,9 +10,8 @@ import {
     ignoredPaths, inferredTypesContainingFile, isEmittedFileOfProgram, isExternalModuleNameRelative,
     isExternalOrCommonJsModule, isNodeModulesDirectory, isRootedDiskPath, isString, isStringLiteralLike, isTraceEnabled,
     length, loadModuleFromGlobalCache, memoize, MinimalResolutionCacheHost, ModeAwareCache,
-    ModeAwareCacheKey,
     ModuleResolutionCache, ModuleResolutionHost, ModuleResolutionInfo, mutateMap, noopFileWatcher, normalizePath,
-    PackageId, packageIdToString, parseNodeModuleFromPath, Path, pathContainsNodeModules, PerModuleNameCache, Program,
+    PackageId, packageIdToString, parseNodeModuleFromPath, Path, pathContainsNodeModules, Program,
     removeSuffix, removeTrailingDirectorySeparator, resolutionExtensionIsTSOrJson, ResolutionMode, ResolvedModuleFull,
     ResolvedModuleWithFailedLookupLocations, ResolvedProjectReference, ResolvedTypeReferenceDirective,
     ResolvedTypeReferenceDirectiveWithFailedLookupLocations, returnTrue, some, SourceFile, startsWith,
@@ -223,24 +222,17 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
     // The key in the map is source file's path.
     // The values are Map of resolutions with key being name lookedup.
     const resolvedModuleNames = new Map<Path, ModeAwareCache<CachedResolvedModuleWithFailedLookupLocations>>();
-    const perDirectoryResolvedModuleNames: CacheWithRedirects<Path, ModeAwareCache<CachedResolvedModuleWithFailedLookupLocations>> = createCacheWithRedirects();
-    const nonRelativeModuleNameCache: CacheWithRedirects<ModeAwareCacheKey, PerModuleNameCache> = createCacheWithRedirects();
     const moduleResolutionCache = createModuleResolutionCache(
         getCurrentDirectory(),
         resolutionHost.getCanonicalFileName,
-        /*options*/ undefined,
-        perDirectoryResolvedModuleNames,
-        nonRelativeModuleNameCache,
     );
 
     const resolvedTypeReferenceDirectives = new Map<Path, ModeAwareCache<CachedResolvedTypeReferenceDirectiveWithFailedLookupLocations>>();
-    const perDirectoryResolvedTypeReferenceDirectives: CacheWithRedirects<Path, ModeAwareCache<CachedResolvedTypeReferenceDirectiveWithFailedLookupLocations>> = createCacheWithRedirects();
     const typeReferenceDirectiveResolutionCache = createTypeReferenceDirectiveResolutionCache(
         getCurrentDirectory(),
         resolutionHost.getCanonicalFileName,
         /*options*/ undefined,
         moduleResolutionCache.getPackageJsonInfoCache(),
-        perDirectoryResolvedTypeReferenceDirectives
     );
 
     /**
@@ -638,7 +630,7 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
             containingFile,
             redirectedReference,
             cache: resolvedTypeReferenceDirectives,
-            perDirectoryCacheWithRedirects: perDirectoryResolvedTypeReferenceDirectives,
+            perDirectoryCacheWithRedirects: typeReferenceDirectiveResolutionCache.directoryToModuleNameMap,
             loader: resolveTypeReferenceDirective,
             getResolutionWithResolvedFileName: getResolvedTypeReferenceDirective,
             shouldRetryResolution: resolution => resolution.resolvedTypeReferenceDirective === undefined,
@@ -660,7 +652,7 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
             containingFile,
             redirectedReference,
             cache: resolvedModuleNames,
-            perDirectoryCacheWithRedirects: perDirectoryResolvedModuleNames,
+            perDirectoryCacheWithRedirects: moduleResolutionCache.directoryToModuleNameMap,
             loader: resolveModuleName,
             getResolutionWithResolvedFileName: getResolvedModule,
             shouldRetryResolution: resolution => !resolution.resolvedModule || !resolutionExtensionIsTSOrJson(resolution.resolvedModule.extension),
