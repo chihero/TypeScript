@@ -25,7 +25,7 @@ import {
     PerformanceEvent, PluginImport, PollingInterval, Program, ProjectPackageJsonInfo, ProjectReference,
     removeFileExtension, ResolutionCache, resolutionExtensionIsTSOrJson, ResolutionMode, ResolvedProjectReference, resolvePackageNameToPackageJson, returnFalse, returnTrue, ScriptKind, some, sort, sortAndDeduplicate,
     SortedReadonlyArray, SourceFile, SourceMapper, startsWith, stripQuotes, StructureIsReused, SymlinkCache,
-    ThrottledCancellationToken, timestamp, toPath, tracing, TypeAcquisition, TypeReferenceDirectiveResolutionInfo, updateErrorForNoInputFiles,
+    ThrottledCancellationToken, timestamp, toPath, tracing, TypeAcquisition, TypeReferenceDirectiveResolutionCache, TypeReferenceDirectiveResolutionInfo, updateErrorForNoInputFiles,
     updateMissingFilePathsWatch, WatchDirectoryFlags, WatchOptions, WatchType,
 } from "./_namespaces/ts";
 
@@ -547,6 +547,11 @@ export abstract class Project implements LanguageServiceHost, ModuleResolutionHo
 
     getModuleResolutionCache(): ModuleResolutionCache | undefined {
         return this.resolutionCache.getModuleResolutionCache();
+    }
+
+    /** @internal */
+    getTypeReferenceDirectiveResolutionCache(): TypeReferenceDirectiveResolutionCache | undefined {
+        return this.resolutionCache.getTypeReferenceDirectiveResolutionCache();
     }
 
     resolveTypeReferenceDirectives(typeDirectiveNames: string[] | FileReference[], containingFile: string, redirectedReference?: ResolvedProjectReference, _options?: CompilerOptions, containingFileMode?: ResolutionMode, resolutionInfo?: TypeReferenceDirectiveResolutionInfo) {
@@ -2388,6 +2393,11 @@ export class AutoImportProviderProject extends Project {
     /** @internal */
     getModuleResolutionCache() {
         return this.hostProject.getCurrentProgram()?.getModuleResolutionCache();
+    }
+
+     /** @internal */
+     getTypeReferenceDirectiveResolutionCache() {
+        return this.hostProject.getCurrentProgram()?.getTypeReferenceDirectiveResolutionCache();
     }
 }
 

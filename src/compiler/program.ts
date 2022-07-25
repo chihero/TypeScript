@@ -1250,6 +1250,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
                     emptyResolution
                 );
         };
+        typeReferenceDirectiveResolutionCache = host.getTypeReferenceDirectiveResolutionCache?.();
     }
     else {
         typeReferenceDirectiveResolutionCache = createTypeReferenceDirectiveResolutionCache(currentDirectory, getCanonicalFileName, /*options*/ undefined, moduleResolutionCache?.getPackageJsonInfoCache());
@@ -1264,6 +1265,15 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         );
         actualResolveTypeReferenceDirectiveNamesWorker = (typeReferenceDirectiveNames, containingFile, redirectedReference, containingFileMode) =>
             loadWithTypeDirectiveCache(Debug.checkEachDefined(typeReferenceDirectiveNames), containingFile, redirectedReference, containingFileMode, loader);
+    }
+
+    if (oldBuildInfoProgram) {
+        moduleResolutionCache?.setOldResolutionCache({
+            getResolved: (dirPath, name, mode, redirectedReference) => oldBuildInfoProgram?.getResolvedModule(dirPath, name, mode, redirectedReference)
+        });
+        typeReferenceDirectiveResolutionCache?.setOldResolutionCache({
+            getResolved: (dirPath, name, mode, redirectedReference) => oldBuildInfoProgram?.getResolvedTypeReferenceDirective(dirPath, name, mode, redirectedReference)
+        });
     }
 
     // Map from a stringified PackageId to the source file with that id.
@@ -1449,6 +1459,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
         getSourceFiles: () => files,
         getMissingFilePaths: () => missingFilePaths!, // TODO: GH#18217
         getModuleResolutionCache: () => moduleResolutionCache,
+        getTypeReferenceDirectiveResolutionCache: () => typeReferenceDirectiveResolutionCache,
         getFilesByNameMap: () => filesByName,
         getCompilerOptions: () => options,
         getSyntacticDiagnostics,

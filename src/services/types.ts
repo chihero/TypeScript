@@ -5,7 +5,7 @@ import {
     MinimalResolutionCacheHost, ModuleResolutionCache, ModuleResolutionInfo, ModuleSpecifierCache,
     ParsedCommandLine, Path, Program, ProjectReference, ResolutionMode, ResolvedModule, ResolvedModuleWithFailedLookupLocations,
     ResolvedProjectReference, ResolvedTypeReferenceDirective, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ScriptKind, SourceFile, SourceFileLike, SourceMapper,
-    Symbol, SymlinkCache, TextChangeRange, textChanges, TextRange, TextSpan, TypeReferenceDirectiveResolutionInfo, UserPreferences,
+    Symbol, SymlinkCache, TextChangeRange, textChanges, TextRange, TextSpan, TypeReferenceDirectiveResolutionCache, TypeReferenceDirectiveResolutionInfo, UserPreferences,
 } from "./_namespaces/ts";
 
 declare module "../compiler/types" {
@@ -329,6 +329,7 @@ export interface LanguageServiceHost extends GetEffectiveTypeRootsHost, MinimalR
     /** @internal */ getSymlinkCache?(files?: readonly SourceFile[]): SymlinkCache;
     /* Lets the Program from a AutoImportProviderProject use its host project's ModuleResolutionCache */
     /** @internal */ getModuleResolutionCache?(): ModuleResolutionCache | undefined;
+    /** @internal */ getTypeReferenceDirectiveResolutionCache?(): TypeReferenceDirectiveResolutionCache | undefined;
 
     /*
      * Required for full import and type reference completions.

@@ -15,7 +15,7 @@ import {
     removeSuffix, removeTrailingDirectorySeparator, resolutionExtensionIsTSOrJson, ResolutionMode, ResolvedModuleFull,
     ResolvedModuleWithFailedLookupLocations, ResolvedProjectReference, ResolvedTypeReferenceDirective,
     ResolvedTypeReferenceDirectiveWithFailedLookupLocations, returnTrue, some, SourceFile, startsWith,
-    stringContains, trace, TypeReferenceDirectiveResolutionInfo, unorderedRemoveItem, updateResolutionField, WatchDirectoryFlags,
+    stringContains, trace, TypeReferenceDirectiveResolutionCache, TypeReferenceDirectiveResolutionInfo, unorderedRemoveItem, updateResolutionField, WatchDirectoryFlags,
 } from "./_namespaces/ts";
 
 /**
@@ -60,6 +60,7 @@ export interface ResolutionCache {
     closeTypeRootsWatch(): void;
 
     getModuleResolutionCache(): ModuleResolutionCache;
+    getTypeReferenceDirectiveResolutionCache(): TypeReferenceDirectiveResolutionCache;
 
     clear(): void;
 }
@@ -255,6 +256,7 @@ export function createResolutionCache(resolutionHost: ResolutionCacheHost, rootD
 
     return {
         getModuleResolutionCache: () => moduleResolutionCache,
+        getTypeReferenceDirectiveResolutionCache: () => typeReferenceDirectiveResolutionCache,
         startRecordingFilesWithChangedResolutions,
         finishRecordingFilesWithChangedResolutions,
         // perDirectoryResolvedModuleNames and perDirectoryResolvedTypeReferenceDirectives could be non empty if there was exception during program update

@@ -1,7 +1,7 @@
 import {
     BaseNodeFactory, CreateSourceFileOptions, EmitHelperFactory, MapLike, ModeAwareCache,
     ModuleResolutionCache, MultiMap, NodeFactoryFlags, OptionsNameMap, PackageJsonInfo, PackageJsonInfoCache, Pattern,
-    ProgramBuildInfo, Push, SymlinkCache,
+    ProgramBuildInfo, Push, SymlinkCache, TypeReferenceDirectiveResolutionCache,
 } from "./_namespaces/ts";
 
 // branded string type used to store absolute, normalized and canonicalized paths
@@ -4430,6 +4430,8 @@ export interface Program extends ScriptReferenceHost {
     /** @internal */
     getModuleResolutionCache(): ModuleResolutionCache | undefined;
     /** @internal */
+    getTypeReferenceDirectiveResolutionCache(): TypeReferenceDirectiveResolutionCache | undefined;
+    /** @internal */
     getFilesByNameMap(): Map<string, SourceFile | false | undefined>;
 
     /**
@@ -7352,6 +7354,7 @@ export interface CompilerHost extends ModuleResolutionHost {
      * Returns the module resolution cache used by a provided `resolveModuleNames` implementation so that any non-name module resolution operations (eg, package.json lookup) can reuse it
      */
     getModuleResolutionCache?(): ModuleResolutionCache | undefined;
+    /** @internal */ getTypeReferenceDirectiveResolutionCache?(): TypeReferenceDirectiveResolutionCache | undefined;
     /**
      * This method is a companion for 'resolveModuleNames' and is used to resolve 'types' references to actual type declaration files
      */

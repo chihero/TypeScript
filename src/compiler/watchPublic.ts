@@ -18,6 +18,7 @@ import {
     ResolvedModuleWithFailedLookupLocations,
     ResolvedProjectReference, ResolvedTypeReferenceDirective, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, returnFalse, returnTrue, ScriptTarget,
     setGetSourceFileAsHashVersioned, SharedExtendedConfigFileWatcher, SourceFile, sys, System, toPath,
+    TypeReferenceDirectiveResolutionCache,
     TypeReferenceDirectiveResolutionInfo,
     updateErrorForNoInputFiles, updateMissingFilePathsWatch, updateSharedExtendedConfigFileWatcher,
     updateWatchingWildcardDirectories, version, WatchDirectoryFlags, WatchOptions, WatchType, WatchTypeRegistry,
@@ -150,6 +151,7 @@ export interface ProgramHost<T extends BuilderProgram> {
      * Returns the module resolution cache used by a provided `resolveModuleNames` implementation so that any non-name module resolution operations (eg, package.json lookup) can reuse it
      */
     getModuleResolutionCache?(): ModuleResolutionCache | undefined;
+    /** @internal */ getTypeReferenceDirectiveResolutionCache?(): TypeReferenceDirectiveResolutionCache | undefined;
 }
 /**
  * Internal interface used to wire emit through same host
@@ -410,6 +412,9 @@ export function createWatchProgram<T extends BuilderProgram>(host: WatchCompiler
     compilerHost.getModuleResolutionCache = host.resolveModuleNames ?
         maybeBind(host, host.getModuleResolutionCache) :
         (() => resolutionCache.getModuleResolutionCache());
+    compilerHost.getTypeReferenceDirectiveResolutionCache = host.resolveTypeReferenceDirectives ?
+        maybeBind(host, host.getTypeReferenceDirectiveResolutionCache) :
+        (() => resolutionCache.getTypeReferenceDirectiveResolutionCache());
     const userProvidedResolution = !!host.resolveModuleNames || !!host.resolveTypeReferenceDirectives;
     // All resolutions are invalid if user provided resolutions and didnt supply hasInvalidatedResolutions
     const customHasInvalidatedResolutions = userProvidedResolution ?
