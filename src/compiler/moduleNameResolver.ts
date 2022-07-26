@@ -689,6 +689,10 @@ export interface CacheWithRedirects<K, T> {
 /** @internal */
 export type RedirectsCacheKey = string & { __compilerOptionsKey: any; };
 /** @internal */
+export function getRedirectsCacheKey(options: CompilerOptions) {
+    return getKeyForCompilationOptions(options, moduleResolutionOptionDeclarations) as RedirectsCacheKey;
+}
+/** @internal */
 export interface RedirectsMapAndOptions<K, T> {
     map: Map<K, T>;
     options: CompilerOptions;
@@ -713,12 +717,8 @@ export function createCacheWithRedirects<K, T>(ownOptions: CompilerOptions | und
         update,
     };
 
-    function getCompilerOptionsKey(options: CompilerOptions) {
-        return getKeyForCompilationOptions(options, moduleResolutionOptionDeclarations) as RedirectsCacheKey;
-    }
-
     function ensureOwnKeyCached() {
-        ownKey ??= ownOptions && getCompilerOptionsKey(ownOptions);
+        ownKey ??= ownOptions && getRedirectsCacheKey(ownOptions);
         if (ownKey && !redirectsKeyToCache.has(ownKey)) redirectsKeyToCache.set(ownKey, { map: ownMap ??= new Map(), options: ownOptions! });
     }
 
@@ -732,7 +732,7 @@ export function createCacheWithRedirects<K, T>(ownOptions: CompilerOptions | und
             const redirects = redirectsMap.get(path || options.configFile!.path);
             if (redirects) return redirects;
         }
-        const key = getCompilerOptionsKey(options);
+        const key = getRedirectsCacheKey(options);
         let map = redirectsKeyToCache.get(key)?.map;
         if (!map) {
             ensureOwnKeyCached();
@@ -772,7 +772,7 @@ export function createCacheWithRedirects<K, T>(ownOptions: CompilerOptions | und
             }
         }
 
-        const key = getCompilerOptionsKey(newOwnOptions);
+        const key = getRedirectsCacheKey(newOwnOptions);
         const existing = redirectsKeyToCache.get(key);
         ownMap = existing?.map || new Map();
         ownKey = key;
@@ -784,7 +784,7 @@ export function createCacheWithRedirects<K, T>(ownOptions: CompilerOptions | und
         if (!redirectedReference) return ownMap;
         const directResult = redirectsMap.get(redirectedReference.sourceFile.path);
         if (directResult) return directResult.map;
-        const key = getCompilerOptionsKey(redirectedReference.commandLine.options);
+        const key = getRedirectsCacheKey(redirectedReference.commandLine.options);
         const fromKey = redirectsKeyToCache.get(key);
         if (fromKey) return fromKey.map;
         if (ownMap) ensureOwnKeyCached();

@@ -1388,8 +1388,7 @@ function getCacheResolutions(state: BuilderProgramState, getCanonicalFileName: G
     const automaticTypeDirectiveNames = state.program!.getAutomaticTypeDirectiveNames();
     if (automaticTypeDirectiveNames.length) {
         const currentDirectory = state.program!.getCurrentDirectory();
-        const containingDirectory = state.compilerOptions.configFilePath ? getDirectoryPath(state.compilerOptions.configFilePath) : currentDirectory;
-        const containingPath = toPath(containingDirectory, currentDirectory, getCanonicalFileName);
+        const containingPath = toPath(state.program!.getAutomaticTypeDirectiveContainingFile(), currentDirectory, getCanonicalFileName);
         typeRefs = toPerDirectoryCache(state, getCanonicalFileName, typeRefs, containingPath, state.program!.getAutomaticTypeDirectiveResolutions());
     }
     return state.cacheResolutions = { modules, typeRefs, moduleNameToDirectoryMap };
@@ -1399,14 +1398,14 @@ function toPerDirectoryCache(
     state: BuilderProgramState,
     getCanonicalFileName: GetCanonicalFileName,
     cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined,
-    fOrDirPath: SourceFile | Path,
+    fOrPath: SourceFile | Path,
     cache: ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations> | undefined,
 ): CacheWithRedirects<Path, ModeAwareCache<ResolvedTypeReferenceDirectiveWithFailedLookupLocations>> | undefined;
 function toPerDirectoryCache(
     state: BuilderProgramState,
     getCanonicalFileName: GetCanonicalFileName,
     cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined,
-    fOrDirPath: SourceFile | Path,
+    fOrPath: SourceFile | Path,
     cache: ModeAwareCache<ResolvedModuleWithFailedLookupLocations> | undefined,
     moduleNameToDirectoryMap: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>>,
 ): CacheWithRedirects<Path, ModeAwareCache<ResolvedModuleWithFailedLookupLocations>> | undefined;
@@ -1414,18 +1413,18 @@ function toPerDirectoryCache<T extends ResolvedModuleWithFailedLookupLocations |
     state: BuilderProgramState,
     getCanonicalFileName: GetCanonicalFileName,
     cacheWithRedirects: CacheWithRedirects<Path, ModeAwareCache<T>> | undefined,
-    fOrDirPath: SourceFile | Path,
+    fOrPath: SourceFile | Path,
     cache: ModeAwareCache<T> | undefined,
     moduleNameToDirectoryMap?: CacheWithRedirects<ModeAwareCacheKey, Map<Path, ResolvedModuleWithFailedLookupLocations>> | undefined,
 ): CacheWithRedirects<Path, ModeAwareCache<T>> | undefined {
     if (!cache?.size()) return cacheWithRedirects;
     let dirPath: Path, redirectedReference: ResolvedProjectReference | undefined;
-    if (!isString(fOrDirPath)) {
-        redirectedReference = state.program!.getRedirectReferenceForResolution(fOrDirPath);
-        dirPath = getDirectoryPath(fOrDirPath.path);
+    if (!isString(fOrPath)) {
+        redirectedReference = state.program!.getRedirectReferenceForResolution(fOrPath);
+        dirPath = getDirectoryPath(fOrPath.path);
     }
     else {
-        dirPath = fOrDirPath;
+        dirPath = getDirectoryPath(fOrPath);
     }
     let perDirResolutionCache = cacheWithRedirects?.getMapOfCacheRedirects(redirectedReference);
     let dirCache = perDirResolutionCache?.get(dirPath);
