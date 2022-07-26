@@ -610,8 +610,6 @@ export interface ModeAwareCache<T> {
  */
 export interface PerDirectoryResolutionCache<T> {
     /** @internal */
-    directoryToModuleNameMap: CacheWithRedirects<Path, ModeAwareCache<T>>;
-    /** @internal */
     getFromCache(directoryName: string, name: string, mode: ResolutionMode, redirectedReference: ResolvedProjectReference | undefined): T | undefined;
     getOrCreateCacheForDirectory(directoryName: string, redirectedReference?: ResolvedProjectReference): ModeAwareCache<T>;
     clear(): void;
@@ -842,7 +840,6 @@ function createPerDirectoryResolutionCache<T>(currentDirectory: string, getCanon
     const directoryToModuleNameMap = createCacheWithRedirects<Path, ModeAwareCache<T>>(options);
     let oldResolutionCache: OldResolutionCache<T> | undefined;
     return {
-        directoryToModuleNameMap,
         getFromCache,
         getOrCreateCacheForDirectory,
         clear,
