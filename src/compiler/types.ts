@@ -6957,6 +6957,7 @@ export interface CreateProgramOptions {
 /** @internal */
 export interface OldBuildInfoProgram {
     getCompilerOptions(): CompilerOptions;
+    clearRedirectsMap(): void;
     getResolvedModule(dirPath: Path, name: string, mode: ResolutionMode, redirectedReference: ResolvedProjectReference | undefined): ResolvedModuleWithFailedLookupLocations | undefined;
     getResolvedTypeReferenceDirective(dirPath: Path, name: string, mode: ResolutionMode, redirectedReference: ResolvedProjectReference | undefined): ResolvedTypeReferenceDirectiveWithFailedLookupLocations | undefined;
 }

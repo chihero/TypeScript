@@ -16,7 +16,7 @@ import {
     getAllowJSCompilerOption, getAutomaticTypeDirectiveNames, GetCanonicalFileName,
     getDeclarationEmitOutputFilePathWorker, getDefaultCompilerOptions, getDefaultLibFileName, getDefaultLibFilePath,
     getDirectoryPath, getEffectiveTypeRoots, getEmitDeclarations, getEntrypointsFromPackageJsonInfo,
-    getNormalizedAbsolutePath, getOrUpdate, getStringComparer, HasInvalidatedResolutions, HostCancellationToken,
+    getNormalizedAbsolutePath, getStringComparer, HasInvalidatedResolutions, HostCancellationToken,
     inferredTypesContainingFile, InstallPackageOptions, IScriptSnapshot, isDeclarationFileName,
     isExternalModuleNameRelative, isInsideNodeModules, JsTyping, LanguageService, LanguageServiceHost,
     LanguageServiceMode, map, mapDefined, maybeBind, ModuleResolutionCache, ModuleResolutionHost,
@@ -25,7 +25,7 @@ import {
     PerformanceEvent, PluginImport, PollingInterval, Program, ProjectPackageJsonInfo, ProjectReference,
     removeFileExtension, ResolutionCache, resolutionExtensionIsTSOrJson, ResolutionMode, ResolvedProjectReference, resolvePackageNameToPackageJson, returnFalse, returnTrue, ScriptKind, some, sort, sortAndDeduplicate,
     SortedReadonlyArray, SourceFile, SourceMapper, startsWith, stripQuotes, StructureIsReused, SymlinkCache,
-    ThrottledCancellationToken, timestamp, toPath, tracing, TypeAcquisition, TypeReferenceDirectiveResolutionCache, TypeReferenceDirectiveResolutionInfo, updateErrorForNoInputFiles,
+    ThrottledCancellationToken, timestamp, toPath, tracing, TypeAcquisition, TypeReferenceDirectiveResolutionCache, TypeReferenceDirectiveResolutionInfo, UnresolvedImports, updateErrorForNoInputFiles,
     updateMissingFilePathsWatch, WatchDirectoryFlags, WatchOptions, WatchType,
 } from "./_namespaces/ts";
 
@@ -178,12 +178,10 @@ export abstract class Project implements LanguageServiceHost, ModuleResolutionHo
 
     /**
      * This is map from files to unresolved imports in it
-     * Maop does not contain entries for files that do not have unresolved imports
-     * This helps in containing the set of files to invalidate
      *
      * @internal
      */
-    cachedUnresolvedImportsPerFile = new Map<Path, readonly string[]>();
+    cachedUnresolvedImportsPerFile = new Map<Path, UnresolvedImports>();
 
     /** @internal */
     lastCachedUnresolvedImportsList: SortedReadonlyArray<string> | undefined;
@@ -1944,7 +1942,7 @@ export abstract class Project implements LanguageServiceHost, ModuleResolutionHo
     }
 }
 
-function getUnresolvedImports(program: Program, cachedUnresolvedImportsPerFile: Map<Path, readonly string[]>): SortedReadonlyArray<string> {
+function getUnresolvedImports(program: Program, cachedUnresolvedImportsPerFile: Map<Path, UnresolvedImports>): SortedReadonlyArray<string> {
     const sourceFiles = program.getSourceFiles();
     tracing?.push(tracing.Phase.Session, "getUnresolvedImports", { count: sourceFiles.length });
     const ambientModules = program.getTypeChecker().getAmbientModules().map(mod => stripQuotes(mod.getName()));
@@ -1959,20 +1957,31 @@ function getUnresolvedImports(program: Program, cachedUnresolvedImportsPerFile: 
     tracing?.pop();
     return result;
 }
-function extractUnresolvedImportsFromSourceFile(file: SourceFile, ambientModules: readonly string[], cachedUnresolvedImportsPerFile: Map<Path, readonly string[]>): readonly string[] {
-    return getOrUpdate(cachedUnresolvedImportsPerFile, file.path, () => {
-        if (!file.resolvedModules) return emptyArray;
-        let unresolvedImports: string[] | undefined;
-        file.resolvedModules.forEach(({ resolvedModule }, name) => {
-            // pick unresolved non-relative names
-            if ((!resolvedModule || !resolutionExtensionIsTSOrJson(resolvedModule.extension)) &&
-                !isExternalModuleNameRelative(name) &&
-                !ambientModules.some(m => m === name)) {
-                unresolvedImports = append(unresolvedImports, parsePackageName(name).packageName);
-            }
-        });
-        return unresolvedImports || emptyArray;
+const emptyUnresolvedImports: UnresolvedImports = {
+    packages: emptyArray,
+    imports: emptyArray,
+};
+function extractUnresolvedImportsFromSourceFile(file: SourceFile, ambientModules: readonly string[], cachedUnresolvedImportsPerFile: Map<Path, UnresolvedImports>): readonly string[] {
+    let result = cachedUnresolvedImportsPerFile.get(file.path);
+    if (result) return result.packages;
+    if (!file.resolvedModules?.size()) {
+        cachedUnresolvedImportsPerFile.set(file.path, emptyUnresolvedImports);
+        return emptyArray;
+    }
+
+    let packages: string[] | undefined;
+    let imports: { name: string; mode: ResolutionMode; }[] | undefined;
+    file.resolvedModules.forEach(({ resolvedModule }, name, mode) => {
+        // pick unresolved non-relative names
+        if ((!resolvedModule || !resolutionExtensionIsTSOrJson(resolvedModule.extension)) &&
+            !isExternalModuleNameRelative(name) &&
+            !ambientModules.some(m => m === name)) {
+            packages = append(packages, parsePackageName(name).packageName);
+            imports = append(imports, { name, mode });
+        }
     });
+    cachedUnresolvedImportsPerFile.set(file.path, result = packages ? { packages, imports: imports! } : emptyUnresolvedImports);
+    return result.packages;
 }
 
 /**

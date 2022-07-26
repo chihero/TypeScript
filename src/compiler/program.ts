@@ -1268,6 +1268,8 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
     }
 
     if (oldBuildInfoProgram) {
+        // Ensure redirected references are verified before using existing cache
+        oldBuildInfoProgram.clearRedirectsMap();
         moduleResolutionCache?.setOldResolutionCache({
             getResolved: (dirPath, name, mode, redirectedReference) => oldBuildInfoProgram?.getResolvedModule(dirPath, name, mode, redirectedReference)
         });
