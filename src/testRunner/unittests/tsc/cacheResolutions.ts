@@ -1,6 +1,6 @@
 import * as Utils from "../../_namespaces/Utils";
 import { getFsWithNode16, getFsWithOut, getFsWithSameResolutionFromMultiplePlaces, getPkgImportContent, getPkgTypeRefContent } from "../tsbuild/cacheResolutionsHelper";
-import { loadProjectFromFiles, noChangeRun, prependText, verifyTscWithEdits } from "./helpers";
+import { loadProjectFromFiles, noChangeRun, prependText, replaceText, verifyTscWithEdits } from "./helpers";
 
 describe("unittests:: tsc:: cacheResolutions::", () => {
     verifyTscWithEdits({
@@ -25,6 +25,20 @@ describe("unittests:: tsc:: cacheResolutions::", () => {
             {
                 subScenario: "write file not resolved by typeRef",
                 modifyFs: fs => fs.writeFileSync("/src/project/node_modules/pkg3/require.d.ts", getPkgTypeRefContent("Require", 3)),
+            },
+            {
+                subScenario: "modify package.json and that should re-resolve",
+                modifyFs: fs => replaceText(fs, "/src/project/node_modules/pkg1/package.json", "./require.js", "./require1.js"),
+                discrepancyExplanation: () => [
+                    `Affected locations are not checked which results in using incorrect resolution`
+                ]
+            },
+            {
+                subScenario: "write file not resolved by import",
+                modifyFs: fs => fs.writeFileSync("/src/project/node_modules/pkg1/require1.d.ts", getPkgImportContent("Require", 1)),
+                discrepancyExplanation: () => [
+                    `Affected locations are not checked which results in using incorrect resolution`
+                ]
             },
             {
                 subScenario: "delete file with imports",

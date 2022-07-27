@@ -1,27 +1,4 @@
-0:: no-change-run
-Incremental build did not emit and has .ts as signature so exports has all imported modules/referenced files
-Clean build always uses d.ts for signature for testing thus does not contain non exported modules/referenced files that arent needed
-Incremental and clean size of maps do not match:: exportedModulesMap:: File:: /src/project/tsconfig.tsbuildinfo.readable.baseline.txt
-Incremental: {
-  "./filewithimports.ts": [
-    "./node_modules/pkg0/import.d.ts"
-  ],
-  "./filewithtyperefs.ts": [
-    "./node_modules/pkg2/import.d.ts"
-  ]
-}
-Clean: {}
-1:: write file not resolved by import
-Incremental build did not emit and has .ts as signature so exports has all imported modules/referenced files
-Clean build always uses d.ts for signature for testing thus does not contain non exported modules/referenced files that arent needed
-Incremental and clean size of maps do not match:: exportedModulesMap:: File:: /src/project/tsconfig.tsbuildinfo.readable.baseline.txt
-Incremental: {
-  "./filewithtyperefs.ts": [
-    "./node_modules/pkg2/import.d.ts"
-  ]
-}
-Clean: {}
-5:: modify package.json and that should re-resolve and random edit
+5:: modify package.json and that should re-resolve
 Affected locations are not checked which results in using incorrect resolution
 TsBuild info text without affectedFilesPendingEmit:: /src/project/tsconfig.tsbuildinfo.readable.baseline.txt::
 CleanBuild:
@@ -56,7 +33,7 @@ CleanBuild:
         "impliedFormat": "commonjs"
       },
       "./randomfileforimport.ts": {
-        "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
+        "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
         "impliedFormat": "commonjs"
       },
       "./randomfilefortyperef.ts": {
@@ -111,12 +88,7 @@ CleanBuild:
       "./randomfileforimport.ts",
       "./randomfilefortyperef.ts"
     ],
-    "emitSignatures": [
-      "./filewithimports.ts",
-      "./filewithtyperefs.ts",
-      "./randomfileforimport.ts",
-      "./randomfilefortyperef.ts"
-    ],
+    "latestChangedDtsFile": "FakeFileName",
     "cacheResolutions": {
       "resolutions": [
         {
@@ -447,7 +419,7 @@ IncrementalBuild:
         "impliedFormat": "commonjs"
       },
       "./randomfileforimport.ts": {
-        "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
+        "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
         "impliedFormat": "commonjs"
       },
       "./randomfilefortyperef.ts": {
@@ -937,12 +909,12 @@ Incremental: {
   },
   "./randomfileforimport.ts": {
     "original": {
-      "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
-      "signature": "-5110318392-export declare const x = 10;\r\nexport declare const y = 10;\r\n",
+      "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+      "signature": "-6057683066-export declare const x = 10;\r\n",
       "impliedFormat": 1
     },
-    "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
-    "signature": "-5110318392-export declare const x = 10;\r\nexport declare const y = 10;\r\n",
+    "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+    "signature": "-6057683066-export declare const x = 10;\r\n",
     "impliedFormat": "commonjs"
   },
   "./randomfilefortyperef.ts": {
@@ -1030,12 +1002,12 @@ Clean: {
   },
   "./randomfileforimport.ts": {
     "original": {
-      "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
-      "signature": "-5110318392-export declare const x = 10;\r\nexport declare const y = 10;\r\n",
+      "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+      "signature": "-6057683066-export declare const x = 10;\r\n",
       "impliedFormat": 1
     },
-    "version": "-11409094169-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;",
-    "signature": "-5110318392-export declare const x = 10;\r\nexport declare const y = 10;\r\n",
+    "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+    "signature": "-6057683066-export declare const x = 10;\r\n",
     "impliedFormat": "commonjs"
   },
   "./randomfilefortyperef.ts": {
@@ -1058,7 +1030,7 @@ Clean: {
     "impliedFormat": "commonjs"
   }
 }
-6:: write file not resolved by import and random edit
+6:: write file not resolved by import
 Affected locations are not checked which results in using incorrect resolution
 TsBuild info text without affectedFilesPendingEmit:: /src/project/tsconfig.tsbuildinfo.readable.baseline.txt::
 CleanBuild:
@@ -1097,7 +1069,7 @@ CleanBuild:
         "impliedFormat": "commonjs"
       },
       "./randomfileforimport.ts": {
-        "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
+        "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
         "impliedFormat": "commonjs"
       },
       "./randomfilefortyperef.ts": {
@@ -1548,7 +1520,7 @@ IncrementalBuild:
         "impliedFormat": "commonjs"
       },
       "./randomfileforimport.ts": {
-        "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
+        "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
         "impliedFormat": "commonjs"
       },
       "./randomfilefortyperef.ts": {
@@ -2038,12 +2010,12 @@ Incremental: {
   },
   "./randomfileforimport.ts": {
     "original": {
-      "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
-      "signature": "-16481542517-export declare const x = 10;\r\nexport declare const y = 10;\r\nexport declare const z = 10;\r\n",
+      "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+      "signature": "-6057683066-export declare const x = 10;\r\n",
       "impliedFormat": 1
     },
-    "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
-    "signature": "-16481542517-export declare const x = 10;\r\nexport declare const y = 10;\r\nexport declare const z = 10;\r\n",
+    "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+    "signature": "-6057683066-export declare const x = 10;\r\n",
     "impliedFormat": "commonjs"
   },
   "./randomfilefortyperef.ts": {
@@ -2140,12 +2112,12 @@ Clean: {
   },
   "./randomfileforimport.ts": {
     "original": {
-      "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
-      "signature": "-16481542517-export declare const x = 10;\r\nexport declare const y = 10;\r\nexport declare const z = 10;\r\n",
+      "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+      "signature": "-6057683066-export declare const x = 10;\r\n",
       "impliedFormat": 1
     },
-    "version": "2513033443-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;export const y = 10;export const z = 10;",
-    "signature": "-16481542517-export declare const x = 10;\r\nexport declare const y = 10;\r\nexport declare const z = 10;\r\n",
+    "version": "-8633945300-import type { ImportInterface0 } from \"pkg0\" assert { \"resolution-mode\": \"import\" };\nexport const x = 10;",
+    "signature": "-6057683066-export declare const x = 10;\r\n",
     "impliedFormat": "commonjs"
   },
   "./randomfilefortyperef.ts": {
