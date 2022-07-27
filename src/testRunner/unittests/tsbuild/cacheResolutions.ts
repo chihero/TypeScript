@@ -173,6 +173,16 @@ describe("unittests:: tsbuild:: cacheResolutions::", () => {
                 discrepancyExplanation: noChangeWithExportsDiscrepancyRun.discrepancyExplanation
             },
             {
+                subScenario: "modify f/fa/faa/x/y/z/randomFileForImport by adding import",
+                modifyFs: fs => prependText(fs, "/src/project/f/fa/faa/x/y/z/randomFileForImport.ts", `import type { ImportInterface0 } from "pkg0";\n`),
+                discrepancyExplanation: noChangeWithExportsDiscrepancyRun.discrepancyExplanation
+            },
+            {
+                subScenario: "modify f/fa/faa/x/y/z/randomFileForImport by adding unresolved import",
+                modifyFs: fs => prependText(fs, "/src/project/f/fa/faa/x/y/z/randomFileForImport.ts", `import type { ImportInterface1 } from "pkg1";\n`),
+                discrepancyExplanation: noChangeWithExportsDiscrepancyRun.discrepancyExplanation
+            },
+            {
                 subScenario: "add file for unresolved import",
                 modifyFs: fs => {
                     fs.mkdirpSync("/src/project/node_modules/pkg1");
