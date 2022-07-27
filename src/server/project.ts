@@ -1063,7 +1063,6 @@ export abstract class Project implements LanguageServiceHost, ModuleResolutionHo
         if (!fileExists) {
             this.resolutionCache.invalidateResolutionOfFile(info.path);
         }
-        this.cachedUnresolvedImportsPerFile.delete(info.path);
 
         if (detachFromProject) {
             info.detachFromProject(this);
@@ -1951,6 +1950,12 @@ function getUnresolvedImports(program: Program, cachedUnresolvedImportsPerFile: 
     const ambientModules = program.getTypeChecker().getAmbientModules().map(mod => stripQuotes(mod.getName()));
     const result = sortAndDeduplicate(flatMap(sourceFiles, sourceFile =>
         extractUnresolvedImportsFromSourceFile(sourceFile, ambientModules, cachedUnresolvedImportsPerFile)));
+    // Remove files from the cache if they arent in program
+    if (cachedUnresolvedImportsPerFile.size !== program.getSourceFiles().length) {
+        cachedUnresolvedImportsPerFile.forEach((_value, key) => {
+            if (!program.getSourceFileByPath(key)) cachedUnresolvedImportsPerFile.delete(key);
+        });
+    }
     tracing?.pop();
     return result;
 }
