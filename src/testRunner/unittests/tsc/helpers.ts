@@ -506,9 +506,11 @@ export type ReadableProgramBuildInfoResolutionCacheWithRedirects = ReadableProgr
     own: ReadableProgramBuildInfoResolutionCacheEntry[] | undefined;
     redirects: readonly ReadableProgramBuildInfoResolutionRedirectsCache[];
 };
+export type ReadableProgramBuildInfoHash = string | [file: string, hash: string];
 interface ReadableProgramBuildInfoCacheResolutions {
     resolutions: readonly ReadableWithOriginal<ReadableProgramBuildInfoResolution, ts.ProgramBuildInfoResolution>[];
     names: readonly string[];
+    hash: readonly ReadableProgramBuildInfoHash[] | undefined;
     resolutionEntries: readonly ReadableWithOriginal<ReadableProgramBuildInfoResolutionEntry, ts.ProgramBuildInfoResolutionEntry>[];
     modules: ReadableProgramBuildInfoResolutionCacheWithRedirects | undefined;
     typeRefs: ReadableProgramBuildInfoResolutionCacheWithRedirects | undefined;
@@ -688,8 +690,13 @@ function generateBuildInfoProgramBaseline(sys: ts.System, buildInfoPath: string,
             resolutions: resolutions.withOriginals,
             resolutionEntries: resolutionEntries.withOriginals,
             modules: toReadableProgramBuildInfoResolutionCacheWithRedirects(cacheResolutions.modules),
-            typeRefs: toReadableProgramBuildInfoResolutionCacheWithRedirects(cacheResolutions.typeRefs)
+            typeRefs: toReadableProgramBuildInfoResolutionCacheWithRedirects(cacheResolutions.typeRefs),
+            hash: cacheResolutions.hash?.map(toReadableProgramBuildInfoHash),
         };
+    }
+
+    function toReadableProgramBuildInfoHash(hash: ts.ProgramBuildInfoHash): ReadableProgramBuildInfoHash {
+        return ts.isArray(hash) ? [toFileName(hash[0]), hash[1]] : toFileName(hash);
     }
 
     function toReadableProgramBuildInfoResolutionCacheWithRedirects(cache: ts.ProgramBuildInfoResolutionCacheWithRedirects | undefined): ReadableProgramBuildInfoResolutionCacheWithRedirects | undefined {
