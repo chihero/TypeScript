@@ -29,7 +29,6 @@ export interface ReadBuildProgramHost {
     useCaseSensitiveFileNames(): boolean;
     getCurrentDirectory(): string;
     readFile(fileName: string): string | undefined;
-    fileExists?(fileName: string): boolean;
     /** @internal */
     getBuildInfo?(fileName: string, configFilePath: string | undefined): BuildInfo | undefined;
 }

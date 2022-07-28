@@ -12,7 +12,6 @@ export interface BuilderProgramHost {
      * return true if file names are treated with case sensitivity
      */
     useCaseSensitiveFileNames(): boolean;
-    fileExists?(fileName: string): boolean;
     /**
      * If provided this would be used this hash instead of actual file shape text for detecting changes
      */

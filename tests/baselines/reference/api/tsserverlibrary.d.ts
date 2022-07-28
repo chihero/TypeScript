@@ -9435,7 +9435,6 @@ declare namespace ts {
          * return true if file names are treated with case sensitivity
          */
         useCaseSensitiveFileNames(): boolean;
-        fileExists?(fileName: string): boolean;
         /**
          * If provided this would be used this hash instead of actual file shape text for detecting changes
          */
@@ -9558,7 +9557,6 @@ declare namespace ts {
         useCaseSensitiveFileNames(): boolean;
         getCurrentDirectory(): string;
         readFile(fileName: string): string | undefined;
-        fileExists?(fileName: string): boolean;
     }
     interface IncrementalProgramOptions<T extends BuilderProgram> {
         rootNames: readonly string[];

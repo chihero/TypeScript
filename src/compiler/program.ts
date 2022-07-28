@@ -57,7 +57,7 @@ import {
     targetOptionDeclaration, toFileNameLowerCase, tokenToString, trace, tracing, trimStringEnd, TsConfigSourceFile,
     TypeChecker, typeDirectiveIsEqualTo, TypeReferenceDirectiveResolutionCache, UnparsedSource, VariableDeclaration,
     VariableStatement, walkUpParenthesizedExpressions, WriteFileCallback, WriteFileCallbackData,
-    writeFileEnsuringDirectories, zipToModeAwareCache, TypeReferenceDirectiveResolutionInfo, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ResolvedModule, ResolutionMode, ModeAwareCache, CreateProgramOptionsWithOldBuildInfoProgram, OldBuildInfoProgram,
+    writeFileEnsuringDirectories, zipToModeAwareCache, TypeReferenceDirectiveResolutionInfo, ResolvedTypeReferenceDirectiveWithFailedLookupLocations, ResolvedModule, ResolutionMode, ModeAwareCache, CreateProgramOptionsWithOldBuildInfoProgram, OldBuildInfoProgram, ModuleResolutionState, OldBuildInfoProgramResolutionHost, getPackageJsonInfo,
 } from "./_namespaces/ts";
 import * as performance from "./_namespaces/ts.performance";
 
@@ -1267,14 +1267,34 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
             loadWithTypeDirectiveCache(Debug.checkEachDefined(typeReferenceDirectiveNames), containingFile, redirectedReference, containingFileMode, loader);
     }
 
+    let oldBuildInfoProgramResolutionHost: OldBuildInfoProgramResolutionHost | undefined;
     if (oldBuildInfoProgram) {
+        const state: ModuleResolutionState = {
+            host,
+            compilerOptions: options,
+            traceEnabled: isTraceEnabled(options, host),
+            failedLookupLocations: [],
+            affectingLocations: [],
+            packageJsonInfoCache: moduleResolutionCache?.getPackageJsonInfoCache(),
+            features: 0,
+            conditions: [],
+            requestContainingDirectory: undefined,
+            reportResolutionDiagnostic: noop
+        };
+        oldBuildInfoProgramResolutionHost = {
+            fileExists: fileName => host.fileExists(fileName),
+            createHash: maybeBind(host, host.createHash),
+            getPackageJsonInfo: fileName => getPackageJsonInfo(getDirectoryPath(fileName), /*onlyRecordFailures*/ false, state),
+        };
         // Ensure redirected references are verified before using existing cache
         oldBuildInfoProgram.clearRedirectsMap();
         moduleResolutionCache?.setOldResolutionCache({
-            getResolved: (dirPath, name, mode, redirectedReference) => oldBuildInfoProgram?.getResolvedModule(dirPath, name, mode, redirectedReference)
+            getResolved: (dirPath, name, mode, redirectedReference) =>
+                oldBuildInfoProgram?.getResolvedModule(oldBuildInfoProgramResolutionHost!, dirPath, name, mode, redirectedReference)
         });
         typeReferenceDirectiveResolutionCache?.setOldResolutionCache({
-            getResolved: (dirPath, name, mode, redirectedReference) => oldBuildInfoProgram?.getResolvedTypeReferenceDirective(dirPath, name, mode, redirectedReference)
+            getResolved: (dirPath, name, mode, redirectedReference) =>
+                oldBuildInfoProgram?.getResolvedTypeReferenceDirective(oldBuildInfoProgramResolutionHost!, dirPath, name, mode, redirectedReference)
         });
     }
 
@@ -1727,6 +1747,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
                 const oldResolution = !oldBuildInfoProgram ?
                     oldSourceFile?.resolvedModules?.get(moduleName.text, mode) :
                     oldBuildInfoProgram.getResolvedModule(
+                        oldBuildInfoProgramResolutionHost!,
                         getDirectoryPath(file.path),
                         moduleName.text,
                         mode,
@@ -1890,6 +1911,7 @@ export function createProgram(rootNamesOrOptions: readonly string[] | CreateProg
                 const oldResolution = !oldBuildInfoProgram ?
                     (containingSourceFile ? oldSourceFile?.resolvedTypeReferenceDirectiveNames : oldProgram?.getAutomaticTypeDirectiveResolutions())?.get(typeDirectiveName, mode) :
                     oldBuildInfoProgram.getResolvedTypeReferenceDirective(
+                        oldBuildInfoProgramResolutionHost!,
                         getDirectoryPath(containingSourceFile ? containingSourceFile.path : toPath(inferredTypeFile!)),
                         typeDirectiveName,
                         mode,

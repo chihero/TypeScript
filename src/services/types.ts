@@ -330,6 +330,7 @@ export interface LanguageServiceHost extends GetEffectiveTypeRootsHost, MinimalR
     /* Lets the Program from a AutoImportProviderProject use its host project's ModuleResolutionCache */
     /** @internal */ getModuleResolutionCache?(): ModuleResolutionCache | undefined;
     /** @internal */ getTypeReferenceDirectiveResolutionCache?(): TypeReferenceDirectiveResolutionCache | undefined;
+    /** @internal */ createHash?(data: string): string;
 
     /*
      * Required for full import and type reference completions.

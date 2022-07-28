@@ -328,6 +328,8 @@ export abstract class Project implements LanguageServiceHost, ModuleResolutionHo
     autoImportProviderHost: AutoImportProviderProject | false | undefined;
     /** @internal */
     protected typeAcquisition: TypeAcquisition | undefined;
+    /** @internal */
+    createHash = maybeBind(this.projectService.host, this.projectService.host.createHash);
 
     /** @internal */
     constructor(
